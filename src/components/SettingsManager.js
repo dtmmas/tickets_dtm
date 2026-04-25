@@ -1,0 +1,139 @@
+import React from 'react';
+
+const SettingsManager = ({ apiUrl, onClose }) => {
+  const [empresaNombre, setEmpresaNombre] = React.useState('');
+  const [loginSubtitle, setLoginSubtitle] = React.useState('');
+  const [logoUrl, setLogoUrl] = React.useState('');
+  const [logoFile, setLogoFile] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
+
+  const token = localStorage.getItem('token');
+
+  const fetchConfig = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const resp = await fetch(`${apiUrl}/config`);
+      const data = await resp.json();
+      setEmpresaNombre(data.empresaNombre || '');
+      setLoginSubtitle(data.loginSubtitle || '');
+      setLogoUrl(data.logoUrl || '');
+    } catch (e) {
+      setError('No fue posible cargar la configuración');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => { fetchConfig(); }, []);
+
+  const handleSaveTexts = async (e) => {
+    e?.preventDefault?.();
+    setLoading(true);
+    setError('');
+    try {
+      // Si hay archivo de logo seleccionado, convertirlo a dataUrl
+      let dataUrl;
+      if (logoFile) {
+        if (!['image/png', 'image/jpeg'].includes(logoFile.type)) {
+          throw new Error('Formato no soportado. Use PNG o JPG');
+        }
+        if (logoFile.size > MAX_LOGO_SIZE) {
+          throw new Error('La imagen excede el límite de 2MB');
+        }
+        dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+          reader.readAsDataURL(logoFile);
+        });
+      }
+      const resp = await fetch(`${apiUrl}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ empresaNombre, loginSubtitle, dataUrl })
+      });
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => ({}));
+        throw new Error(j.error || 'Error al guardar configuración');
+      }
+      const data = await resp.json();
+      setEmpresaNombre(data.empresaNombre || empresaNombre);
+      setLoginSubtitle(data.loginSubtitle || loginSubtitle);
+      if (data.logoUrl) {
+        setLogoUrl(data.logoUrl);
+        setLogoFile(null);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectLogo = (file) => {
+    if (!file) { setLogoFile(null); return; }
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setError('Formato no soportado. Use PNG o JPG');
+      return;
+    }
+    if (file.size > MAX_LOGO_SIZE) {
+      setError('La imagen excede el límite de 2MB');
+      return;
+    }
+    setError('');
+    setLogoFile(file);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-10 flex items-center justify-center h-full px-4">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-screen-sm md:max-w-2xl overflow-visible">
+          <div className="pb-1 pt-4 px-4 md:px-6 text-left flex items-center justify-between">
+            <div className="text-[1.5rem] font-semibold text-[#2c3e50]">Configuración</div>
+            <button onClick={onClose} className="text-gray-600 hover:text-gray-800">✕</button>
+          </div>
+          <div className="px-4 md:px-6 pt-4 pb-4">
+            {error && <div className="bg-red-600 text-white px-3 py-2 rounded mb-3 text-sm">{error}</div>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Logo de la empresa</h3>
+                <div className="border rounded p-3">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo" className="max-h-24 object-contain mx-auto mb-3" />
+                  ) : (
+                    <div className="text-center text-gray-500 text-sm mb-3">Sin logo</div>
+                  )}
+                  <input type="file" accept="image/png,image/jpeg" onChange={(e)=>handleSelectLogo(e.target.files[0])} className="w-full text-sm" />
+                  <p className="text-xs text-gray-500 mt-1">Formatos permitidos: PNG, JPG</p>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Textos del login</h3>
+                <form onSubmit={handleSaveTexts} className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Nombre de la empresa</label>
+                    <input value={empresaNombre} onChange={(e)=>setEmpresaNombre(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Subtítulo del login</label>
+                    <input value={loginSubtitle} onChange={(e)=>setLoginSubtitle(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">Guardar</button>
+                    <button type="button" onClick={fetchConfig} disabled={loading} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Recargar</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsManager;

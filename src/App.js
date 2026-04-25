@@ -1,75 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Box from '@mui/material/Box';
+import React, { useState, useEffect, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import TicketList from './components/TicketList';
 import TicketDialog from './components/TicketDialog';
-import { AppBar, Toolbar, Typography, Container, Paper, CircularProgress, Snackbar, Alert } from '@mui/material';
+import TiposSoporteManager from './components/TiposSoporteManager';
+import Login from './components/Login';
+import SettingsManager from './components/SettingsManager';
+import UsersManager from './components/UsersManager';
+import CalendarAgenda from './components/CalendarAgenda';
 
 // API URL
-const API_URL = 'http://localhost:3001/api';
+// En producción, usamos path relativo para que funcione con cualquier IP/dominio
+// En desarrollo, el proxy en package.json redirige a localhost:3001
+const API_URL = '/api';
 
 // Estados de tickets disponibles
 const estadosTicket = ['pendiente', 'resuelto', 'cancelado'];
 
-// Tipos de soporte disponibles
-const tiposSoporte = ['Hardware', 'Software', 'Red', 'Técnico', 'Otro'];
-
-// Tema de la aplicación
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#3f51b5',
-    },
-    secondary: {
-      main: '#f50057',
-    },
-    background: {
-      default: '#fafafa',
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#333333',
-      secondary: '#757575',
-    }
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h4: {
-      fontWeight: 400,
-    },
-    h5: {
-      fontWeight: 400,
-    },
-    h6: {
-      fontWeight: 400,
-    }
-  },
-  shape: {
-    borderRadius: 8
-  },
-  components: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-        }
-      }
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 500
-        }
-      }
-    }
-  }
-});
+// UI con Tailwind: sin ThemeProvider ni componentes MUI a nivel de app
 
 function App() {
+  // Estados de autenticación
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authToken, setAuthToken] = useState(localStorage.getItem('token'));
+  
   const [tickets, setTickets] = useState([]);
+  const [tiposSoporte, setTiposSoporte] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentTicket, setCurrentTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,12 +36,123 @@ function App() {
     resueltos: 0,
     cancelados: 0
   });
+  const [showTipos, setShowTipos] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showUsersManager, setShowUsersManager] = useState(false);
+  const isAdmin = String(user?.rol || user?.user?.rol || '').toLowerCase() === 'admin';
+
+  // Filtros de listado
+  const [filterEstado, setFilterEstado] = useState('');
+  const [filterTipo, setFilterTipo] = useState('');
+  const [filterQuery, setFilterQuery] = useState('');
+  const [viewMode, setViewMode] = useState('lista'); // 'lista' | 'calendario'
+
+  // Tickets filtrados por estado y tipo
+  const filteredTickets = useMemo(() => {
+    let result = tickets;
+    if (filterEstado) {
+      result = result.filter((t) => t.estado === filterEstado);
+    }
+    if (filterTipo) {
+      result = result.filter((t) => t.tipoSoporte === filterTipo);
+    }
+    if (filterQuery) {
+      const q = filterQuery.toLowerCase();
+      result = result.filter((t) =>
+        (t.cliente && t.cliente.toLowerCase().includes(q)) ||
+        (t.telefono && t.telefono.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [tickets, filterEstado, filterTipo, filterQuery]);
+
+  // Verificar token al cargar la aplicación
+  useEffect(() => {
+    const verifyToken = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/verify-token`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+            setIsAuthenticated(true);
+            setAuthToken(token);
+          } else {
+            localStorage.removeItem('token');
+            setAuthToken(null);
+          }
+        } catch (error) {
+          console.error('Error verificando token:', error);
+          localStorage.removeItem('token');
+          setAuthToken(null);
+        }
+      }
+      setLoading(false);
+    };
+
+    verifyToken();
+  }, []);
+
+  // Función de login
+  const handleLogin = async (credentials) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('token', data.token);
+        setAuthToken(data.token);
+        setUser(data.user);
+        setIsAuthenticated(true);
+        setError(null);
+        // Cargar tickets y tipos de soporte después del login
+        fetchTickets();
+        fetchTiposSoporte();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al iniciar sesión');
+      }
+    } catch (error) {
+      console.error('Error en login:', error);
+      setError('Error de conexión al servidor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función de logout
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setAuthToken(null);
+    setUser(null);
+    setIsAuthenticated(false);
+    setTickets([]);
+  };
 
   // Cargar tickets desde el backend
   const fetchTickets = async () => {
+    if (!authToken) return;
+    
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/tickets`);
+      const response = await fetch(`${API_URL}/tickets`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Error al cargar tickets');
@@ -101,6 +168,42 @@ function App() {
       setLoading(false);
     }
   };
+
+  // Cargar tipos de soporte desde el backend
+  const fetchTiposSoporte = async () => {
+    if (!authToken) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/tipos-soporte`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar tipos de soporte');
+      }
+      
+      const data = await response.json();
+      setTiposSoporte(data.items || data);
+    } catch (err) {
+      console.error('Error al cargar tipos de soporte:', err);
+      // No mostrar error al usuario, usar tipos por defecto si falla
+      setTiposSoporte([
+        { id: 1, nombre: 'Soporte Técnico' },
+        { id: 2, nombre: 'Consulta General' },
+        { id: 3, nombre: 'Otro' }
+      ]);
+    }
+  };
+
+  // Cargar tickets cuando el usuario esté autenticado
+  useEffect(() => {
+    if (isAuthenticated && authToken) {
+      fetchTickets();
+      fetchTiposSoporte();
+    }
+  }, [isAuthenticated, authToken]);
 
   // Cargar tickets al iniciar
   useEffect(() => {
@@ -143,6 +246,7 @@ function App() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
           },
           body: JSON.stringify(ticketData),
         });
@@ -152,13 +256,15 @@ function App() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
           },
           body: JSON.stringify(ticketData),
         });
       }
       
       if (!response.ok) {
-        throw new Error('Error al guardar ticket');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al guardar ticket');
       }
       
       const savedTicket = await response.json();
@@ -174,15 +280,15 @@ function App() {
       setError(null);
     } catch (err) {
       console.error('Error:', err);
-      setError('Error al guardar ticket. Verifica la conexión al servidor.');
+      setError(err.message || 'Error al guardar ticket. Verifica la conexión al servidor.');
     } finally {
       setLoading(false);
       setOpenDialog(false);
     }
   };
 
-  // Actualizar el estado de un ticket
-  const handleUpdateStatus = async (id, nuevoEstado) => {
+  // Actualizar el estado de un ticket (incluye motivo de cancelación)
+  const handleUpdateStatus = async (id, nuevoEstado, motivoCancelacion) => {
     try {
       setLoading(true);
       
@@ -190,12 +296,22 @@ function App() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ estado: nuevoEstado }),
+        body: JSON.stringify(
+          nuevoEstado === 'cancelado'
+            ? { estado: nuevoEstado, motivo_cancelacion: (motivoCancelacion || '').trim() }
+            : { estado: nuevoEstado }
+        ),
       });
       
       if (!response.ok) {
-        throw new Error('Error al actualizar estado');
+        let serverMsg = 'Error al actualizar estado';
+        try {
+          const data = await response.json();
+          if (data && data.error) serverMsg = data.error;
+        } catch (_) {}
+        throw new Error(serverMsg);
       }
       
       const updatedTicket = await response.json();
@@ -203,7 +319,7 @@ function App() {
       setError(null);
     } catch (err) {
       console.error('Error:', err);
-      setError('Error al actualizar estado. Verifica la conexión al servidor.');
+      setError(err.message || 'Error al actualizar estado. Verifica la conexión al servidor.');
     } finally {
       setLoading(false);
     }
@@ -216,6 +332,9 @@ function App() {
       
       const response = await fetch(`${API_URL}/tickets/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
       });
       
       if (!response.ok) {
@@ -238,71 +357,187 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <AppBar position="static" elevation={0} sx={{ backgroundColor: 'white', color: 'text.primary', borderBottom: '1px solid #e0e0e0' }}>
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 500 }}>
-              Sistema de Tickets de Soporte DTM Jacaltenango
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
-          <Dashboard 
-            estadisticas={estadisticas} 
-            onAddTicket={handleAddTicket} 
-          />
+    <>
+      {!isAuthenticated ? (
+        <Login onLogin={handleLogin} loading={loading} error={error} apiUrl={API_URL} />
+      ) : (
+        <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+          <header className="bg-white border-b border-gray-200 flex-none z-10">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center">
+              <div className="font-semibold text-lg text-gray-800 flex-1">Sistema de Tickets de Soporte DTM Jacaltenango</div>
+              <div className="text-sm text-gray-600 mr-4">Bienvenido, {user?.nombre || user?.user?.nombre}</div>
+              {isAdmin && (
+                <button onClick={() => setShowTipos(true)} className="text-sm px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white mr-3">
+                  Tipos de Soporte
+                </button>
+              )}
+              {isAdmin && (
+                <button onClick={() => setShowSettings(true)} className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white mr-3">
+                  Configuración
+                </button>
+              )}
+              <button onClick={handleLogout} className="text-sm px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300">
+                Cerrar Sesión
+              </button>
+            </div>
+          </header>
           
-          <Paper sx={{ mt: 3, p: 2, position: 'relative' }}>
-            {loading && (
-              <Box sx={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                zIndex: 1
-              }}>
-                <CircularProgress />
-              </Box>
-            )}
-            <TicketList 
-              tickets={tickets} 
-              estados={estadosTicket}
-              onEditTicket={handleEditTicket}
-              onUpdateStatus={handleUpdateStatus}
-              onDeleteTicket={handleDeleteTicket}
-            />
-          </Paper>
-        </Container>
-        
-        <TicketDialog 
-          open={openDialog}
-          ticket={currentTicket}
-          tiposSoporte={tiposSoporte}
-          onClose={() => setOpenDialog(false)}
-          onSave={handleSaveTicket}
-          loading={loading}
-        />
-        
-        <Snackbar 
-          open={!!error} 
-          autoHideDuration={6000} 
-          onClose={handleCloseError}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
-            {error}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </ThemeProvider>
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="w-full mx-auto mt-4 mb-4 px-6 flex flex-col h-full min-h-0">
+              <div className="flex-none mb-4">
+                <Dashboard 
+                  estadisticas={estadisticas} 
+                  onAddTicket={handleAddTicket} 
+                />
+              </div>
+              
+              <div className="flex-1 flex flex-col min-h-0 bg-white rounded-lg shadow overflow-hidden relative">
+                {loading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
+                    <div className="h-6 w-6 rounded-full border-4 border-gray-300 border-t-transparent animate-spin" />
+                  </div>
+                )}
+                
+                <div className="p-4 flex-none border-b border-gray-100">
+                  {/* Filtros por tipo y estado */}
+                  <div className="flex flex-col md:flex-row md:items-end gap-3">
+                    <div className="flex-1 min-w-full md:min-w-[220px]">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                      <input
+                        type="text"
+                        value={filterQuery}
+                        onChange={(e) => setFilterQuery(e.target.value)}
+                        placeholder="Nombre del cliente o teléfono"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-3 w-full md:w-auto">
+                      <div className="flex-1 md:flex-none">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                        <select
+                          value={filterEstado}
+                          onChange={(e) => setFilterEstado(e.target.value)}
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Todos</option>
+                          {estadosTicket.map((estado) => (
+                            <option key={estado} value={estado}>
+                              {estado.charAt(0).toUpperCase() + estado.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1 md:flex-none">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Soporte</label>
+                        <select
+                          value={filterTipo}
+                          onChange={(e) => setFilterTipo(e.target.value)}
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Todos</option>
+                          {tiposSoporte.map((tipo) => (
+                            <option key={tipo.id} value={tipo.nombre}>{tipo.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {(filterEstado || filterTipo || filterQuery) && (
+                      <button
+                        type="button"
+                        onClick={() => { setFilterEstado(''); setFilterTipo(''); setFilterQuery(''); }}
+                        className="w-full md:w-auto rounded-md border border-gray-300 bg-gray-100 text-gray-700 px-3 py-2 text-sm hover:bg-gray-200"
+                      >
+                        Limpiar filtros
+                      </button>
+                    )}
+                    <div className="ml-0 md:ml-auto w-full md:w-auto">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vista</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('lista')}
+                          className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='lista' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                        >
+                          Lista
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('calendario')}
+                          className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='calendario' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                        >
+                          Calendario
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-hidden relative">
+                  {viewMode === 'lista' ? (
+                    <div className="absolute inset-0 overflow-hidden">
+                      <TicketList 
+                        tickets={filteredTickets} 
+                        estados={estadosTicket}
+                        onEditTicket={handleEditTicket}
+                        onUpdateStatus={handleUpdateStatus}
+                        onDeleteTicket={handleDeleteTicket}
+                        apiUrl={API_URL}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-full overflow-auto p-4">
+                      <CalendarAgenda 
+                        tickets={filteredTickets}
+                        onSelectTicket={handleEditTicket}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </main>
+          
+          <TicketDialog 
+            open={openDialog}
+            ticket={currentTicket}
+            tiposSoporte={tiposSoporte}
+            onClose={() => setOpenDialog(false)}
+            onSave={handleSaveTicket}
+            loading={loading}
+          />
+
+          {showTipos && isAdmin && (
+            <TiposSoporteManager apiUrl={API_URL} onClose={() => setShowTipos(false)} />
+          )}
+              {isAuthenticated && isAdmin && (
+                <div className="fixed bottom-6 right-6 z-40">
+                  <button
+                    onClick={() => setShowUsersManager(true)}
+                    className="rounded-full shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                    title="Gestionar usuarios"
+                  >
+                    Usuarios
+                  </button>
+                </div>
+              )}
+              {showSettings && (
+                <SettingsManager apiUrl={API_URL} onClose={() => setShowSettings(false)} />
+              )}
+              {showUsersManager && (
+                <UsersManager apiUrl={API_URL} onClose={() => setShowUsersManager(false)} />
+              )}
+          
+          {error && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 max-w-lg w-full px-4">
+              <div className="bg-red-600 text-white px-4 py-3 rounded-md shadow flex items-start justify-between">
+                <div className="mr-3">{error}</div>
+                <button onClick={handleCloseError} className="text-white/90 hover:text-white">✕</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
