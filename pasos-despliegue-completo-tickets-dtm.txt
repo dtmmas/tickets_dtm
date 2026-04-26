@@ -1,0 +1,175 @@
+PASOS DE DESPLIEGUE COMPLETO - TICKETS DTM
+
+OBJETIVO
+Tener una guia clara para actualizar, desplegar, reiniciar y verificar el sistema
+Tickets DTM en el VPS.
+
+
+1. ACTUALIZAR CODIGO EN GITHUB
+
+En tu equipo local:
+
+cd "c:\Users\HP\Desktop\PRoyectos generados con ia\proyecto trae 2\ticket-system"
+git status
+git add .
+git commit -m "Describe aqui el cambio"
+git push origin main
+
+
+2. ENTRAR AL VPS
+
+ssh root@TU_IP
+
+
+3. IR A LA CARPETA DEL PROYECTO
+
+cd /var/www/tickets_dtm
+
+
+4. BAJAR CAMBIOS DESDE GITHUB
+
+git pull origin main
+
+
+5. ACTUALIZAR FRONTEND
+
+cd /var/www/tickets_dtm
+npm install
+npm run build
+
+
+6. ACTUALIZAR BACKEND
+
+cd /var/www/tickets_dtm/server
+npm install
+
+
+7. REVISAR VARIABLES DE ENTORNO
+
+Si el cambio afecta dominio, CORS, base de datos, JWT o puertos:
+
+nano /var/www/tickets_dtm/server/.env
+
+
+8. REINICIAR LA APLICACION
+
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+
+
+9. VERIFICAR LOGS
+
+pm2 logs tickets-dtm --lines 20
+
+
+10. VERIFICAR ESTADO DEL PROCESO
+
+pm2 status
+
+
+11. SI HUBO CAMBIOS EN NGINX
+
+nano /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+
+12. SI HUBO CAMBIOS EN SSL
+
+certbot --nginx -d app.sistemasdtm.com
+certbot renew --dry-run
+
+
+13. VERIFICAR SERVICIOS
+
+systemctl status nginx
+systemctl status mysql
+
+
+14. PROBAR LA API
+
+curl http://127.0.0.1:3001/api/config
+curl https://app.sistemasdtm.com/api/config
+
+
+15. PROBAR EN EL NAVEGADOR
+
+https://app.sistemasdtm.com
+
+
+ACTUALIZACION COMPLETA EN BLOQUE
+
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+ACTUALIZACION SOLO BACKEND
+
+cd /var/www/tickets_dtm
+git pull origin main
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+ACTUALIZACION SOLO FRONTEND
+
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+
+
+ACTUALIZACION SOLO .ENV
+
+nano /var/www/tickets_dtm/server/.env
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+ACTUALIZACION SOLO NGINX
+
+nano /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+
+COMANDO DE EMERGENCIA
+
+cd /var/www/tickets_dtm && git pull origin main && npm install && npm run build && cd /var/www/tickets_dtm/server && npm install && pm2 restart tickets-dtm --update-env && pm2 logs tickets-dtm --lines 15
+
+
+DIAGNOSTICO RAPIDO
+
+pm2 logs tickets-dtm --lines 50
+pm2 status
+systemctl status nginx
+systemctl status mysql
+curl http://127.0.0.1:3001/api/config
+curl https://app.sistemasdtm.com/api/config
+
+
+REGLAS PRACTICAS
+
+Si cambias React o estilos:
+npm run build
+
+Si cambias backend:
+pm2 restart tickets-dtm --update-env
+
+Si cambias .env:
+pm2 restart tickets-dtm --update-env
+
+Si cambias Nginx:
+nginx -t
+systemctl restart nginx

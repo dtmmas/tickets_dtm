@@ -1,0 +1,131 @@
+INDICE DE MANUALES - TICKETS DTM
+
+Este archivo sirve como guia maestra para saber que documento consultar segun la
+tarea que quieras realizar en el proyecto o en el VPS.
+
+
+1. comandos-vps-tickets-dtm.txt
+
+Uso:
+Para copiar y pegar comandos rapidos.
+
+Contenido:
+- plantilla corta de 10 comandos
+- manual corto
+- version ultra corta
+- chuleta de 3 lineas
+- chuleta de una sola linea
+- casos rapidos
+
+Cuando usarlo:
+- cuando necesites actualizar rapido
+- cuando solo quieras ejecutar comandos sin leer explicaciones
+
+
+2. manual-vps-ordenado-tickets-dtm.txt
+
+Uso:
+Para consultar el proceso por secciones.
+
+Contenido:
+- frontend
+- backend
+- archivo .env
+- nginx
+- ssl
+- mysql
+- actualizacion completa
+- diagnostico rapido
+
+Cuando usarlo:
+- cuando quieras ir directo al tema especifico
+- cuando no recuerdes en que parte tocar algo
+
+
+3. pasos-despliegue-completo-tickets-dtm.txt
+
+Uso:
+Para seguir una guia completa paso a paso.
+
+Contenido:
+- despliegue completo
+- actualizacion desde GitHub
+- build
+- backend
+- nginx
+- ssl
+- pruebas
+- reglas practicas
+
+Cuando usarlo:
+- cuando hagas una actualizacion importante
+- cuando reinstales el sistema
+- cuando quieras una guia mas clara y presentable
+
+
+4. credenciales-y-rutas-importantes-tickets-dtm.txt
+
+Uso:
+Para consultar rutas, URLs y comandos clave.
+
+Contenido:
+- URLs importantes
+- rutas del VPS
+- rutas del proyecto local
+- comandos Git
+- comandos PM2
+- comandos Nginx
+- comandos MySQL
+- pruebas rapidas
+
+Cuando usarlo:
+- cuando olvides una ruta
+- cuando necesites recordar una URL o ubicacion
+- cuando quieras una referencia rapida
+
+
+5. respaldo-y-restauracion-tickets-dtm.txt
+
+Uso:
+Para respaldo y recuperacion del sistema.
+
+Contenido:
+- backup de base de datos
+- restauracion de base de datos
+- backup del proyecto
+- backup de .env
+- backup de nginx
+- recuperacion completa
+
+Cuando usarlo:
+- antes de cambios delicados
+- antes de actualizaciones grandes
+- si necesitas restaurar el sistema por una falla
+
+
+RECOMENDACION DE USO
+
+Para actualizacion rapida:
+usa comandos-vps-tickets-dtm.txt
+
+Para trabajar por secciones:
+usa manual-vps-ordenado-tickets-dtm.txt
+
+Para despliegue completo:
+usa pasos-despliegue-completo-tickets-dtm.txt
+
+Para recordar rutas y comandos:
+usa credenciales-y-rutas-importantes-tickets-dtm.txt
+
+Para respaldo y recuperacion:
+usa respaldo-y-restauracion-tickets-dtm.txt
+
+
+ORDEN IDEAL DE CONSULTA
+
+1. indice-manuales-tickets-dtm.txt
+2. comandos-vps-tickets-dtm.txt
+3. manual-vps-ordenado-tickets-dtm.txt
+4. pasos-despliegue-completo-tickets-dtm.txt
+5. credenciales-y-rutas-importantes-tickets-dtm.txt
+6. respaldo-y-restauracion-tickets-dtm.txt

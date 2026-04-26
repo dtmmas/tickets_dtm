@@ -1,0 +1,136 @@
+MANUAL VPS ORDENADO - TICKETS DTM
+
+FRONTEND
+
+Actualizar frontend:
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+
+Solo si cambiaste React, estilos o componentes:
+cd /var/www/tickets_dtm
+npm install
+npm run build
+
+
+BACKEND
+
+Actualizar backend:
+cd /var/www/tickets_dtm
+git pull origin main
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+
+Ver logs backend:
+pm2 logs tickets-dtm --lines 20
+
+Ver estado backend:
+pm2 status
+
+Reiniciar backend:
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+
+
+ARCHIVO .ENV
+
+Editar variables:
+nano /var/www/tickets_dtm/server/.env
+
+Aplicar cambios de .env:
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+NGINX
+
+Editar configuracion:
+nano /etc/nginx/sites-available/tickets-dtm
+
+Validar configuracion:
+nginx -t
+
+Reiniciar Nginx:
+systemctl restart nginx
+
+Ver estado Nginx:
+systemctl status nginx
+
+
+SSL
+
+Instalar Certbot:
+apt install -y certbot python3-certbot-nginx
+
+Generar certificado:
+certbot --nginx -d app.sistemasdtm.com
+
+Renovacion de prueba:
+certbot renew --dry-run
+
+
+MYSQL
+
+Ver estado MySQL:
+systemctl status mysql
+
+Probar API local:
+curl http://127.0.0.1:3001/api/config
+
+
+ACTUALIZACION COMPLETA VPS
+
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+ACTUALIZACION SOLO BACKEND
+
+cd /var/www/tickets_dtm
+git pull origin main
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+ACTUALIZACION SOLO FRONTEND
+
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+pm2 restart tickets-dtm --update-env
+
+
+ACTUALIZACION SOLO NGINX
+
+nano /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+
+DIAGNOSTICO RAPIDO
+
+pm2 logs tickets-dtm --lines 50
+pm2 status
+systemctl status nginx
+systemctl status mysql
+curl http://127.0.0.1:3001/api/config
+curl https://app.sistemasdtm.com/api/config
+
+
+PRUEBA FINAL
+
+Abrir en navegador:
+https://app.sistemasdtm.com

@@ -1,0 +1,106 @@
+COMANDOS VPS - TICKETS DTM
+
+1. PLANTILLA CORTA DE 10 COMANDOS
+
+ssh root@TU_IP
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+exit
+
+
+2. MANUAL CORTO
+
+Entrar al VPS:
+ssh root@TU_IP
+
+Ir al proyecto:
+cd /var/www/tickets_dtm
+
+Descargar cambios:
+git pull origin main
+
+Instalar dependencias frontend:
+npm install
+
+Generar build frontend:
+npm run build
+
+Ir al backend:
+cd /var/www/tickets_dtm/server
+
+Instalar dependencias backend:
+npm install
+
+Si hubo cambios en .env:
+nano /var/www/tickets_dtm/server/.env
+
+Reiniciar aplicacion:
+pm2 restart tickets-dtm --update-env
+
+Ver logs:
+pm2 logs tickets-dtm --lines 20
+
+Ver estado:
+pm2 status
+
+Si hubo cambios en Nginx:
+nano /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+Verificaciones rapidas:
+systemctl status nginx
+systemctl status mysql
+curl http://127.0.0.1:3001/api/config
+curl https://app.sistemasdtm.com/api/config
+
+
+3. VERSION ULTRA CORTA
+
+cd /var/www/tickets_dtm
+git pull origin main
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 15
+
+
+4. CHULETA DE 3 LINEAS
+
+cd /var/www/tickets_dtm && git pull origin main && npm install && npm run build
+cd /var/www/tickets_dtm/server && npm install && pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 15
+
+
+5. CHULETA DE UNA SOLA LINEA
+
+cd /var/www/tickets_dtm && git pull origin main && npm install && npm run build && cd /var/www/tickets_dtm/server && npm install && pm2 restart tickets-dtm --update-env && pm2 logs tickets-dtm --lines 15
+
+
+6. CASOS RAPIDOS
+
+Solo backend:
+cd /var/www/tickets_dtm && git pull origin main && cd /var/www/tickets_dtm/server && npm install && pm2 restart tickets-dtm --update-env
+
+Solo frontend:
+cd /var/www/tickets_dtm && git pull origin main && npm install && npm run build && cd /var/www/tickets_dtm/server && pm2 restart tickets-dtm --update-env
+
+Solo .env:
+cd /var/www/tickets_dtm/server && pm2 restart tickets-dtm --update-env && pm2 logs tickets-dtm --lines 15
+
+Si tambien cambiaste Nginx:
+nginx -t && systemctl restart nginx
+
+
+7. PRUEBA FINAL
+
+Abrir en navegador:
+https://app.sistemasdtm.com

@@ -11,10 +11,29 @@ const { appBaseUrl, clientUrls, jwtSecret, poolConfig, port } = require('./env')
 const app = express();
 app.set('trust proxy', 1);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (clientUrls.includes(origin)) return true;
+
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isPrivateIpv4 =
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+
+    return isLocalhost || isPrivateIpv4;
+  } catch (_) {
+    return false;
+  }
+};
+
 // Middleware
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || clientUrls.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Origen no permitido por CORS'));

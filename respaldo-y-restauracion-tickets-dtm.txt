@@ -1,0 +1,143 @@
+RESPALDO Y RESTAURACION - TICKETS DTM
+
+OBJETIVO
+Tener comandos practicos para respaldar la base de datos, el proyecto y restaurar
+el sistema en caso de falla.
+
+
+1. RESPALDO DE BASE DE DATOS
+
+Crear respaldo SQL:
+mysqldump -u root -p ticket_system > /root/backup-ticket-system.sql
+
+Crear respaldo con fecha:
+mysqldump -u root -p ticket_system > /root/backup-ticket-system-$(date +%F).sql
+
+
+2. RESTAURAR BASE DE DATOS
+
+Entrar a MySQL:
+mysql -u root -p
+
+Crear base si no existe:
+CREATE DATABASE ticket_system;
+EXIT;
+
+Restaurar desde archivo:
+mysql -u root -p ticket_system < /root/backup-ticket-system.sql
+
+
+3. RESPALDO DEL PROYECTO
+
+Crear zip del proyecto:
+cd /var/www
+tar -czf /root/tickets-dtm-backup.tar.gz tickets_dtm
+
+Crear zip con fecha:
+cd /var/www
+tar -czf /root/tickets-dtm-backup-$(date +%F).tar.gz tickets_dtm
+
+
+4. RESTAURAR EL PROYECTO
+
+Ir a carpeta base:
+cd /var/www
+
+Eliminar carpeta anterior si hace falta:
+rm -rf tickets_dtm
+
+Restaurar backup:
+tar -xzf /root/tickets-dtm-backup.tar.gz
+
+
+5. RESPALDO DEL ARCHIVO .ENV
+
+Copiar .env:
+cp /var/www/tickets_dtm/server/.env /root/tickets-dtm-env-backup.txt
+
+Copiar .env con fecha:
+cp /var/www/tickets_dtm/server/.env /root/tickets-dtm-env-$(date +%F).txt
+
+
+6. RESTAURAR EL ARCHIVO .ENV
+
+cp /root/tickets-dtm-env-backup.txt /var/www/tickets_dtm/server/.env
+
+
+7. RESPALDO DE NGINX
+
+cp /etc/nginx/sites-available/tickets-dtm /root/tickets-dtm-nginx-backup.conf
+
+
+8. RESTAURAR NGINX
+
+cp /root/tickets-dtm-nginx-backup.conf /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+
+9. RESPALDO COMPLETO RECOMENDADO
+
+mysqldump -u root -p ticket_system > /root/backup-ticket-system-$(date +%F).sql
+cp /var/www/tickets_dtm/server/.env /root/tickets-dtm-env-$(date +%F).txt
+cp /etc/nginx/sites-available/tickets-dtm /root/tickets-dtm-nginx-$(date +%F).conf
+cd /var/www
+tar -czf /root/tickets-dtm-files-$(date +%F).tar.gz tickets_dtm
+
+
+10. RECUPERACION COMPLETA
+
+Paso 1:
+Restaurar archivos del proyecto
+
+cd /var/www
+rm -rf tickets_dtm
+tar -xzf /root/tickets-dtm-files-AAAA-MM-DD.tar.gz
+
+Paso 2:
+Restaurar .env
+
+cp /root/tickets-dtm-env-AAAA-MM-DD.txt /var/www/tickets_dtm/server/.env
+
+Paso 3:
+Restaurar base de datos
+
+mysql -u root -p ticket_system < /root/backup-ticket-system-AAAA-MM-DD.sql
+
+Paso 4:
+Restaurar nginx
+
+cp /root/tickets-dtm-nginx-AAAA-MM-DD.conf /etc/nginx/sites-available/tickets-dtm
+nginx -t
+systemctl restart nginx
+
+Paso 5:
+Levantar sistema
+
+cd /var/www/tickets_dtm
+npm install
+npm run build
+cd /var/www/tickets_dtm/server
+npm install
+pm2 restart tickets-dtm --update-env
+pm2 logs tickets-dtm --lines 20
+
+
+11. VERIFICACIONES DESPUES DE RESTAURAR
+
+pm2 status
+systemctl status nginx
+systemctl status mysql
+curl http://127.0.0.1:3001/api/config
+curl https://app.sistemasdtm.com/api/config
+
+
+12. RECOMENDACION PRACTICA
+
+Haz siempre 4 respaldos:
+- base de datos
+- carpeta del proyecto
+- archivo .env
+- configuracion de nginx
+
+Asi puedes recuperar el sistema completo aunque falle una parte.

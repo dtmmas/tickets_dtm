@@ -1,0 +1,179 @@
+REFERENCIA RAPIDA - TICKETS DTM
+
+URLS IMPORTANTES
+
+Produccion:
+https://app.sistemasdtm.com
+
+Produccion sin SSL o acceso alterno:
+http://app.sistemasdtm.com
+
+Backend local en VPS:
+http://127.0.0.1:3001
+
+Frontend local en desarrollo:
+http://localhost:3000
+
+Backend local en desarrollo:
+http://localhost:3001
+
+
+RUTAS IMPORTANTES EN VPS
+
+Proyecto:
+/var/www/tickets_dtm
+
+Backend:
+/var/www/tickets_dtm/server
+
+Archivo .env:
+/var/www/tickets_dtm/server/.env
+
+Archivo .env.example:
+/var/www/tickets_dtm/server/.env.example
+
+Configuracion Nginx:
+/etc/nginx/sites-available/tickets-dtm
+
+Sitios habilitados Nginx:
+/etc/nginx/sites-enabled
+
+Logs PM2:
+/root/.pm2/logs/tickets-dtm-out.log
+/root/.pm2/logs/tickets-dtm-error.log
+
+
+RUTAS IMPORTANTES EN TRAE
+
+Proyecto local:
+c:\Users\HP\Desktop\PRoyectos generados con ia\proyecto trae 2\ticket-system
+
+Backend local:
+c:\Users\HP\Desktop\PRoyectos generados con ia\proyecto trae 2\ticket-system\server
+
+Archivo principal backend:
+server\server.js
+
+Archivo de variables:
+server\env.js
+
+
+COMANDOS CLAVE GIT
+
+Ver estado:
+git status
+
+Agregar cambios:
+git add .
+
+Crear commit:
+git commit -m "Describe aqui el cambio"
+
+Subir cambios:
+git push origin main
+
+Bajar cambios en VPS:
+git pull origin main
+
+
+COMANDOS CLAVE VPS
+
+Entrar por SSH:
+ssh root@TU_IP
+
+Ir al proyecto:
+cd /var/www/tickets_dtm
+
+Ir al backend:
+cd /var/www/tickets_dtm/server
+
+Instalar frontend:
+npm install
+
+Generar build:
+npm run build
+
+Instalar backend:
+cd /var/www/tickets_dtm/server
+npm install
+
+Reiniciar PM2:
+pm2 restart tickets-dtm --update-env
+
+Ver logs:
+pm2 logs tickets-dtm --lines 20
+
+Ver estado PM2:
+pm2 status
+
+Vaciar logs PM2:
+pm2 flush
+
+
+COMANDOS CLAVE NGINX
+
+Editar configuracion:
+nano /etc/nginx/sites-available/tickets-dtm
+
+Validar configuracion:
+nginx -t
+
+Reiniciar Nginx:
+systemctl restart nginx
+
+Ver estado:
+systemctl status nginx
+
+
+COMANDOS CLAVE MYSQL
+
+Ver estado:
+systemctl status mysql
+
+Entrar a MySQL:
+mysql -u root -p
+
+Ver tablas:
+USE ticket_system;
+SHOW TABLES;
+
+
+PRUEBAS RAPIDAS
+
+Probar API local en VPS:
+curl http://127.0.0.1:3001/api/config
+
+Probar API publica:
+curl https://app.sistemasdtm.com/api/config
+
+Probar sitio:
+https://app.sistemasdtm.com
+
+
+VARIABLES .ENV MAS IMPORTANTES
+
+PORT
+DB_HOST
+DB_USER
+DB_PASSWORD
+DB_NAME
+JWT_SECRET
+CLIENT_URLS
+APP_BASE_URL
+NEW_ADMIN_PASSWORD
+
+
+RECORDATORIOS
+
+Si cambias frontend:
+npm run build
+
+Si cambias backend:
+pm2 restart tickets-dtm --update-env
+
+Si cambias .env:
+pm2 restart tickets-dtm --update-env
+
+Si cambias Nginx:
+nginx -t
+systemctl restart nginx
