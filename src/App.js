@@ -8,6 +8,7 @@ import SettingsManager from './components/SettingsManager';
 import UsersManager from './components/UsersManager';
 import CalendarAgenda from './components/CalendarAgenda';
 import { hasPermission } from './permissions';
+import { applyFavicon } from './branding';
 
 // API URL
 // En producción, usamos path relativo para que funcione con cualquier IP/dominio
@@ -115,6 +116,21 @@ function App() {
     };
 
     verifyToken();
+  }, []);
+
+  useEffect(() => {
+    const fetchPublicConfig = async () => {
+      try {
+        const response = await fetch(`${API_URL}/config`);
+        if (!response.ok) return;
+        const data = await response.json();
+        applyFavicon(data.faviconUrl || '');
+      } catch (_) {
+        // Ignorar errores de branding
+      }
+    };
+
+    fetchPublicConfig();
   }, []);
 
   // Función de login

@@ -74,11 +74,61 @@ const buildPublicUrl = (req, relativePath) => {
   return `${getPublicBaseUrl(req)}${normalizedPath}`;
 };
 
+const buildAssetUrl = (req, assetPath) => {
+  if (!assetPath) return '';
+  return buildPublicUrl(req, `/uploads/${path.basename(assetPath)}`);
+};
+
+const parseImageDataUrl = (dataUrl, allowedMimeMap, maxSize, invalidFormatMessage) => {
+  if (!dataUrl) return null;
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+    throw new Error('dataUrl inválido');
+  }
+
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
+  if (!match) {
+    throw new Error('Contenido base64 inválido');
+  }
+
+  const mimeType = String(match[1] || '').toLowerCase();
+  const ext = allowedMimeMap[mimeType];
+  if (!ext) {
+    throw new Error(invalidFormatMessage);
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(match[2], 'base64');
+  } catch (_) {
+    throw new Error('Contenido base64 inválido');
+  }
+
+  if (buffer.length > maxSize) {
+    const err = new Error(`La imagen excede el límite de ${Math.floor(maxSize / (1024 * 1024)) || 1}MB`);
+    err.status = 413;
+    throw err;
+  }
+
+  return { buffer, ext };
+};
+
+const deleteUploadedAsset = (assetPath) => {
+  if (!assetPath) return;
+  const fullPath = path.join(uploadsDir, path.basename(assetPath));
+  try {
+    if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+  } catch (e) {
+    console.warn('No se pudo eliminar archivo anterior:', e);
+  }
+};
+
 // Configuración de empresa (logo y textos de login)
 const configPath = path.join(__dirname, 'config.json');
 const defaultConfig = {
   empresaNombre: 'DTM Jacaltenango',
   loginSubtitle: 'Sistema de Tickets de Soporte DTM Jacaltenango',
+  logoPath: '',
+  faviconPath: '',
 };
 function readConfig() {
   try {
@@ -310,6 +360,7 @@ db.getConnection((err, connection) => {
       empresa_nombre VARCHAR(200),
       login_subtitle VARCHAR(200),
       logo_path VARCHAR(255),
+      favicon_path VARCHAR(255),
       fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `;
@@ -318,6 +369,18 @@ db.getConnection((err, connection) => {
       console.error('Error al crear tabla config_empresa:', err);
     } else {
       console.log('Tabla config_empresa creada o ya existente');
+      const faviconColCheck = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'config_empresa' AND COLUMN_NAME = 'favicon_path'`;
+      db.query(faviconColCheck, (fcErr, fcRows) => {
+        if (fcErr) {
+          console.error('Error al verificar columna favicon_path:', fcErr);
+        } else if (!Array.isArray(fcRows) || fcRows.length === 0) {
+          db.query('ALTER TABLE config_empresa ADD COLUMN favicon_path VARCHAR(255) DEFAULT NULL', (alterErr) => {
+            if (alterErr) {
+              console.error('Error al asegurar columna favicon_path:', alterErr);
+            }
+          });
+        }
+      });
       db.query('SELECT COUNT(*) AS c FROM config_empresa WHERE id = 1', (selErr, rows) => {
         if (selErr) {
           console.error('Error al verificar fila de configuración:', selErr);
@@ -325,8 +388,8 @@ db.getConnection((err, connection) => {
           const count = rows && rows[0] ? rows[0].c : 0;
           if (count === 0) {
             const cfg = readConfig();
-            const insertSql = 'INSERT INTO config_empresa (id, empresa_nombre, login_subtitle, logo_path) VALUES (1, ?, ?, NULL)';
-            db.query(insertSql, [cfg.empresaNombre || 'DTM Jacaltenango', cfg.loginSubtitle || 'Sistema de Tickets de Soporte DTM Jacaltenango'], (insErr) => {
+            const insertSql = 'INSERT INTO config_empresa (id, empresa_nombre, login_subtitle, logo_path, favicon_path) VALUES (1, ?, ?, NULL, ?)';
+            db.query(insertSql, [cfg.empresaNombre || 'DTM Jacaltenango', cfg.loginSubtitle || 'Sistema de Tickets de Soporte DTM Jacaltenango', cfg.faviconPath || null], (insErr) => {
               if (insErr) {
                 console.error('Error al insertar configuración inicial:', insErr);
               } else {
@@ -433,107 +496,86 @@ db.getConnection((err, connection) => {
 
 // Config pública para pantalla de login (no requiere token)
 app.get('/api/config', (req, res) => {
-  db.query('SELECT empresa_nombre, login_subtitle, logo_path FROM config_empresa WHERE id = 1', (err, rows) => {
+  db.query('SELECT empresa_nombre, login_subtitle, logo_path, favicon_path FROM config_empresa WHERE id = 1', (err, rows) => {
     if (err) {
       console.error('Error al leer configuración desde BD, usando archivo:', err);
       const cfg = readConfig();
-      const logoCandidates = ['company-logo.png', 'company-logo.jpg', 'company-logo.jpeg'];
-      let logoUrl = '';
-      for (const file of logoCandidates) {
-        const full = path.join(uploadsDir, file);
-        try { if (fs.existsSync(full)) { logoUrl = buildPublicUrl(req, `/uploads/${file}`); break; } } catch (_) {}
-      }
-      return res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
+      return res.json({
+        empresaNombre: cfg.empresaNombre,
+        loginSubtitle: cfg.loginSubtitle,
+        logoUrl: buildAssetUrl(req, cfg.logoPath),
+        faviconUrl: buildAssetUrl(req, cfg.faviconPath)
+      });
     }
+
     const row = rows && rows[0] ? rows[0] : null;
-    const empresaNombre = row?.empresa_nombre ?? readConfig().empresaNombre;
-    const loginSubtitle = row?.login_subtitle ?? readConfig().loginSubtitle;
-    const logoPath = row?.logo_path || '';
-    const logoUrl = logoPath ? buildPublicUrl(req, `/uploads/${path.basename(logoPath)}`) : '';
-    res.json({ empresaNombre, loginSubtitle, logoUrl });
+    const cfg = readConfig();
+    const empresaNombre = row?.empresa_nombre ?? cfg.empresaNombre;
+    const loginSubtitle = row?.login_subtitle ?? cfg.loginSubtitle;
+    const logoUrl = buildAssetUrl(req, row?.logo_path || cfg.logoPath);
+    const faviconUrl = buildAssetUrl(req, row?.favicon_path || cfg.faviconPath);
+    res.json({ empresaNombre, loginSubtitle, logoUrl, faviconUrl });
   });
 });
 
-// Actualizar textos de login y nombre de empresa y opcionalmente logo
-app.put('/api/config', verifyToken, requirePermission('settings.manage'), (req, res) => {
-  const { empresaNombre = '', loginSubtitle = '', dataUrl } = req.body || {};
+// Actualizar textos de login y opcionalmente logo y favicon
+app.put('/api/config', verifyToken, requirePermission('settings.manage'), async (req, res) => {
+  const { empresaNombre = '', loginSubtitle = '', dataUrl, faviconDataUrl } = req.body || {};
 
-  // Guardar logo si viene incluido
-  let newLogoFilename = '';
-  if (dataUrl) {
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
-      return res.status(400).json({ error: 'dataUrl inválido' });
-    }
-    const match = dataUrl.match(/^data:(image\/(png|jpeg|jpg));base64,(.+)$/i);
-    if (!match) {
-      return res.status(400).json({ error: 'Formato de imagen no soportado. Use PNG o JPG.' });
-    }
-    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
-    const ext = match[2].toLowerCase() === 'png' ? 'png' : 'jpg';
-    const base64 = match[3];
-    let buffer;
-    try {
-      buffer = Buffer.from(base64, 'base64');
-    } catch (_) {
-      return res.status(400).json({ error: 'Contenido base64 inválido' });
-    }
-    if (buffer.length > MAX_SIZE) {
-      return res.status(413).json({ error: 'La imagen excede el límite de 2MB' });
+  try {
+    const current = await querySingle(
+      'SELECT empresa_nombre, login_subtitle, logo_path, favicon_path FROM config_empresa WHERE id = 1'
+    );
+
+    let logoPath = current?.logo_path || null;
+    let faviconPath = current?.favicon_path || null;
+
+    if (dataUrl) {
+      const image = parseImageDataUrl(
+        dataUrl,
+        { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg' },
+        2 * 1024 * 1024,
+        'Formato de imagen no soportado. Use PNG o JPG.'
+      );
+      deleteUploadedAsset(logoPath);
+      logoPath = `company-logo.${image.ext}`;
+      fs.writeFileSync(path.join(uploadsDir, logoPath), image.buffer);
     }
 
-    // Eliminar logo anterior si existe
-    db.query('SELECT logo_path FROM config_empresa WHERE id = 1', (selErr, rows) => {
-      if (!selErr && rows && rows[0] && rows[0].logo_path) {
-        const prevPath = path.join(uploadsDir, path.basename(rows[0].logo_path));
-        try {
-          if (fs.existsSync(prevPath)) fs.unlinkSync(prevPath);
-        } catch (e) {
-          console.warn('No se pudo eliminar logo anterior:', e);
-        }
-      }
-      // Guardar nuevo logo
-      newLogoFilename = `company-logo.${ext}`;
-      const fullPath = path.join(uploadsDir, newLogoFilename);
-      try {
-        fs.writeFileSync(fullPath, buffer);
-      } catch (e) {
-        console.error('Error al guardar logo:', e);
-        return res.status(500).json({ error: 'No se pudo guardar el logo' });
-      }
+    if (faviconDataUrl) {
+      const image = parseImageDataUrl(
+        faviconDataUrl,
+        { 'image/png': 'png', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico' },
+        1024 * 1024,
+        'Formato de favicon no soportado. Use PNG o ICO.'
+      );
+      deleteUploadedAsset(faviconPath);
+      faviconPath = `company-favicon.${image.ext}`;
+      fs.writeFileSync(path.join(uploadsDir, faviconPath), image.buffer);
+    }
 
-      // Upsert configuración con nuevo logo
-      const upsertSql = `INSERT INTO config_empresa (id, empresa_nombre, login_subtitle, logo_path)
-                         VALUES (1, ?, ?, ?)
-                         ON DUPLICATE KEY UPDATE empresa_nombre = VALUES(empresa_nombre), login_subtitle = VALUES(login_subtitle), logo_path = VALUES(logo_path)`;
-      db.query(upsertSql, [empresaNombre, loginSubtitle, newLogoFilename], (updErr) => {
-        if (updErr) {
-          console.error('Error al guardar configuración en BD:', updErr);
-          return res.status(500).json({ error: 'Error al guardar configuración' });
-        }
-        const cfg = writeConfig({ empresaNombre, loginSubtitle });
-        const logoUrl = buildPublicUrl(req, `/uploads/${newLogoFilename}`);
-        res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
-      });
+    await dbPromise.query(
+      `INSERT INTO config_empresa (id, empresa_nombre, login_subtitle, logo_path, favicon_path)
+       VALUES (1, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         empresa_nombre = VALUES(empresa_nombre),
+         login_subtitle = VALUES(login_subtitle),
+         logo_path = VALUES(logo_path),
+         favicon_path = VALUES(favicon_path)`,
+      [empresaNombre, loginSubtitle, logoPath, faviconPath]
+    );
+
+    const cfg = writeConfig({ empresaNombre, loginSubtitle, logoPath, faviconPath });
+    res.json({
+      empresaNombre: cfg.empresaNombre,
+      loginSubtitle: cfg.loginSubtitle,
+      logoUrl: buildAssetUrl(req, logoPath),
+      faviconUrl: buildAssetUrl(req, faviconPath)
     });
-    return; // Evitar continuar flujo síncrono
+  } catch (error) {
+    console.error('Error al guardar configuración:', error);
+    res.status(error?.status || 500).json({ error: error.message || 'Error al guardar configuración' });
   }
-
-  // Upsert sin cambiar logo
-  const upsertSql = `INSERT INTO config_empresa (id, empresa_nombre, login_subtitle, logo_path)
-                     VALUES (1, ?, ?, (SELECT logo_path FROM config_empresa WHERE id = 1))
-                     ON DUPLICATE KEY UPDATE empresa_nombre = VALUES(empresa_nombre), login_subtitle = VALUES(login_subtitle)`;
-  db.query(upsertSql, [empresaNombre, loginSubtitle], (updErr) => {
-    if (updErr) {
-      console.error('Error al guardar configuración en BD:', updErr);
-      return res.status(500).json({ error: 'Error al guardar configuración' });
-    }
-    const cfg = writeConfig({ empresaNombre, loginSubtitle });
-    db.query('SELECT logo_path FROM config_empresa WHERE id = 1', (lpErr, rows) => {
-      const logoPath = (!lpErr && rows && rows[0] && rows[0].logo_path) ? rows[0].logo_path : '';
-      const logoUrl = logoPath ? buildPublicUrl(req, `/uploads/${path.basename(logoPath)}`) : '';
-      res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
-    });
-  });
 });
 
 // Subir logo de empresa vía data URL

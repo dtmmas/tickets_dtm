@@ -1,4 +1,5 @@
 import React from 'react';
+import { applyFavicon } from '../branding';
 
 const SettingsManager = ({ apiUrl, onClose }) => {
   const toUpperValue = (value) => String(value || '').toUpperCase();
@@ -6,13 +7,16 @@ const SettingsManager = ({ apiUrl, onClose }) => {
   const [loginSubtitle, setLoginSubtitle] = React.useState('');
   const [logoUrl, setLogoUrl] = React.useState('');
   const [logoFile, setLogoFile] = React.useState(null);
+  const [faviconUrl, setFaviconUrl] = React.useState('');
+  const [faviconFile, setFaviconFile] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
+  const MAX_FAVICON_SIZE = 1024 * 1024; // 1MB
 
   const token = localStorage.getItem('token');
 
-  const fetchConfig = async () => {
+  const fetchConfig = React.useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -21,14 +25,15 @@ const SettingsManager = ({ apiUrl, onClose }) => {
       setEmpresaNombre(data.empresaNombre || '');
       setLoginSubtitle(data.loginSubtitle || '');
       setLogoUrl(data.logoUrl || '');
+      setFaviconUrl(data.faviconUrl || '');
     } catch (e) {
       setError('No fue posible cargar la configuración');
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiUrl]);
 
-  React.useEffect(() => { fetchConfig(); }, []);
+  React.useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
   const handleSaveTexts = async (e) => {
     e?.preventDefault?.();
@@ -37,6 +42,7 @@ const SettingsManager = ({ apiUrl, onClose }) => {
     try {
       // Si hay archivo de logo seleccionado, convertirlo a dataUrl
       let dataUrl;
+      let faviconDataUrl;
       if (logoFile) {
         if (!['image/png', 'image/jpeg'].includes(logoFile.type)) {
           throw new Error('Formato no soportado. Use PNG o JPG');
@@ -51,10 +57,24 @@ const SettingsManager = ({ apiUrl, onClose }) => {
           reader.readAsDataURL(logoFile);
         });
       }
+      if (faviconFile) {
+        if (!['image/png', 'image/x-icon', 'image/vnd.microsoft.icon'].includes(faviconFile.type)) {
+          throw new Error('El favicon debe ser PNG o ICO');
+        }
+        if (faviconFile.size > MAX_FAVICON_SIZE) {
+          throw new Error('El favicon excede el límite de 1MB');
+        }
+        faviconDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('No se pudo leer el favicon'));
+          reader.readAsDataURL(faviconFile);
+        });
+      }
       const resp = await fetch(`${apiUrl}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ empresaNombre, loginSubtitle, dataUrl })
+        body: JSON.stringify({ empresaNombre, loginSubtitle, dataUrl, faviconDataUrl })
       });
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));
@@ -66,6 +86,11 @@ const SettingsManager = ({ apiUrl, onClose }) => {
       if (data.logoUrl) {
         setLogoUrl(data.logoUrl);
         setLogoFile(null);
+      }
+      if (data.faviconUrl) {
+        setFaviconUrl(data.faviconUrl);
+        setFaviconFile(null);
+        applyFavicon(data.faviconUrl);
       }
     } catch (e) {
       setError(e.message);
@@ -86,6 +111,20 @@ const SettingsManager = ({ apiUrl, onClose }) => {
     }
     setError('');
     setLogoFile(file);
+  };
+
+  const handleSelectFavicon = (file) => {
+    if (!file) { setFaviconFile(null); return; }
+    if (!['image/png', 'image/x-icon', 'image/vnd.microsoft.icon'].includes(file.type)) {
+      setError('El favicon debe ser PNG o ICO');
+      return;
+    }
+    if (file.size > MAX_FAVICON_SIZE) {
+      setError('El favicon excede el límite de 1MB');
+      return;
+    }
+    setError('');
+    setFaviconFile(file);
   };
 
   return (
@@ -113,6 +152,18 @@ const SettingsManager = ({ apiUrl, onClose }) => {
                 </div>
               </div>
               <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Icono de la pestaña</h3>
+                <div className="border rounded p-3 mb-4">
+                  {faviconUrl ? (
+                    <img src={faviconUrl} alt="Favicon" className="h-10 w-10 object-contain mx-auto mb-3" />
+                  ) : (
+                    <div className="text-center text-gray-500 text-sm mb-3">Sin favicon</div>
+                  )}
+                  <input type="file" accept="image/png,.ico,image/x-icon" onChange={(e)=>handleSelectFavicon(e.target.files[0])} className="w-full text-sm" />
+                  <p className="text-xs text-gray-500 mt-1">Formatos permitidos: PNG o ICO. Recomendado: 32x32 o 64x64.</p>
+                </div>
+              </div>
+              <div className="md:col-span-2">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Textos del login</h3>
                 <form onSubmit={handleSaveTexts} className="space-y-2">
                   <div>

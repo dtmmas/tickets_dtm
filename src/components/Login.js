@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { applyFavicon } from '../branding';
 
 const Login = ({ onLogin, loading, error, apiUrl }) => {
   const [formData, setFormData] = useState({
@@ -20,6 +21,7 @@ const Login = ({ onLogin, loading, error, apiUrl }) => {
         setEmpresaNombre(data.empresaNombre || '');
         setLoginSubtitle(data.loginSubtitle || '');
         setLogoUrl(data.logoUrl || '');
+        applyFavicon(data.faviconUrl || '');
       } catch (e) {
         // Ignorar errores de carga de config
       }
