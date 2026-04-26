@@ -1,12 +1,8 @@
 const mysql = require('mysql2');
+const { dbConfig } = require('./env');
 
 // Configuración de la base de datos
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'huberto051986',
-  database: 'ticket_system'
-});
+const db = mysql.createConnection(dbConfig);
 
 // Función para actualizar la estructura de la tabla tickets
 async function updateTicketsTable() {

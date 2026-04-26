@@ -1,13 +1,9 @@
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
+const { dbConfig } = require('./env');
 
 // Configuración de conexión (ajusta si tu .env difiere)
-const connection = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'huberto051986',
-  database: process.env.DB_NAME || 'ticket_system'
-});
+const connection = mysql.createConnection(dbConfig);
 
 async function run() {
   try {

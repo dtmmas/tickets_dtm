@@ -6,21 +6,19 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const { appBaseUrl, clientUrls, jwtSecret, poolConfig, port } = require('./env');
 
 const app = express();
-const port = process.env.PORT || 3001; // Permite configurar puerto por variable de entorno
-
-// Clave secreta para JWT (en producción debe estar en variables de entorno)
-const JWT_SECRET = 'dtm_jacaltenango_secret_key_2024';
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3021'
-  ],
+  origin(origin, callback) {
+    if (!origin || clientUrls.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origen no permitido por CORS'));
+  },
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -35,6 +33,19 @@ try {
   console.warn('No se pudo crear el directorio de uploads:', e);
 }
 app.use('/uploads', express.static(uploadsDir));
+
+const getPublicBaseUrl = (req) => {
+  if (appBaseUrl) return appBaseUrl;
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'http';
+  const host = req.get('host');
+  return host ? `${protocol}://${host}` : `http://localhost:${port}`;
+};
+
+const buildPublicUrl = (req, relativePath) => {
+  const normalizedPath = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${getPublicBaseUrl(req)}${normalizedPath}`;
+};
 
 // Configuración de empresa (logo y textos de login)
 const configPath = path.join(__dirname, 'config.json');
@@ -74,7 +85,7 @@ const verifyToken = (req, res, next) => {
   const actualToken = token.startsWith('Bearer ') ? token.slice(7) : token;
   
   try {
-    const decoded = jwt.verify(actualToken, JWT_SECRET);
+    const decoded = jwt.verify(actualToken, jwtSecret);
     req.user = decoded;
     next();
   } catch (error) {
@@ -83,15 +94,7 @@ const verifyToken = (req, res, next) => {
 };
 
 // Configuración de la conexión a MySQL (Pool)
-const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'huberto051986',
-  database: 'ticket_system',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+const db = mysql.createPool(poolConfig);
 
 // Probar conexión inicial y crear tablas
 db.getConnection((err, connection) => {
@@ -270,7 +273,7 @@ app.get('/api/config', (req, res) => {
       let logoUrl = '';
       for (const file of logoCandidates) {
         const full = path.join(uploadsDir, file);
-        try { if (fs.existsSync(full)) { logoUrl = `http://localhost:${port}/uploads/${file}`; break; } } catch (_) {}
+        try { if (fs.existsSync(full)) { logoUrl = buildPublicUrl(req, `/uploads/${file}`); break; } } catch (_) {}
       }
       return res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
     }
@@ -278,7 +281,7 @@ app.get('/api/config', (req, res) => {
     const empresaNombre = row?.empresa_nombre ?? readConfig().empresaNombre;
     const loginSubtitle = row?.login_subtitle ?? readConfig().loginSubtitle;
     const logoPath = row?.logo_path || '';
-    const logoUrl = logoPath ? `http://localhost:${port}/uploads/${path.basename(logoPath)}` : '';
+    const logoUrl = logoPath ? buildPublicUrl(req, `/uploads/${path.basename(logoPath)}`) : '';
     res.json({ empresaNombre, loginSubtitle, logoUrl });
   });
 });
@@ -343,7 +346,7 @@ app.put('/api/config', verifyToken, (req, res) => {
           return res.status(500).json({ error: 'Error al guardar configuración' });
         }
         const cfg = writeConfig({ empresaNombre, loginSubtitle });
-        const logoUrl = `http://localhost:${port}/uploads/${newLogoFilename}`;
+        const logoUrl = buildPublicUrl(req, `/uploads/${newLogoFilename}`);
         res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
       });
     });
@@ -362,7 +365,7 @@ app.put('/api/config', verifyToken, (req, res) => {
     const cfg = writeConfig({ empresaNombre, loginSubtitle });
     db.query('SELECT logo_path FROM config_empresa WHERE id = 1', (lpErr, rows) => {
       const logoPath = (!lpErr && rows && rows[0] && rows[0].logo_path) ? rows[0].logo_path : '';
-      const logoUrl = logoPath ? `http://localhost:${port}/uploads/${path.basename(logoPath)}` : '';
+      const logoUrl = logoPath ? buildPublicUrl(req, `/uploads/${path.basename(logoPath)}`) : '';
       res.json({ empresaNombre: cfg.empresaNombre, loginSubtitle: cfg.loginSubtitle, logoUrl });
     });
   });
@@ -411,7 +414,7 @@ app.post('/api/config/logo', verifyToken, (req, res) => {
     return res.status(500).json({ error: 'No se pudo guardar el logo' });
   }
   const cfg = writeConfig({});
-  const logoUrl = `http://localhost:${port}/uploads/${filename}`;
+  const logoUrl = buildPublicUrl(req, `/uploads/${filename}`);
   res.json({ ...cfg, logoUrl });
 });
 
@@ -614,7 +617,7 @@ app.post('/api/login', (req, res) => {
           nombre: user.nombre,
           rol: user.rol 
         },
-        JWT_SECRET,
+        jwtSecret,
         { expiresIn: '8h' }
       );
       
@@ -1189,5 +1192,5 @@ if (fs.existsSync(buildPath)) {
 
 // Iniciar servidor
 app.listen(port, () => {
-  console.log(`Servidor backend ejecutándose en http://localhost:${port}`);
+  console.log(`Servidor backend ejecutándose en el puerto ${port}`);
 });

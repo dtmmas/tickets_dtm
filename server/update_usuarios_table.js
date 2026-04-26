@@ -1,11 +1,7 @@
 const mysql = require('mysql2');
+const { dbConfig } = require('./env');
 
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'huberto051986',
-  database: 'ticket_system'
-});
+const db = mysql.createConnection(dbConfig);
 
 function describe(table) {
   return new Promise((resolve, reject) => {

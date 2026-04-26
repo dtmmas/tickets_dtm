@@ -1,13 +1,9 @@
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
+const { dbConfig } = require('./env');
 
 // Configuración de la base de datos
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'huberto051986',
-  database: 'ticket_system'
-});
+const db = mysql.createConnection(dbConfig);
 
 // Función para crear usuarios de prueba
 async function createTestUsers() {

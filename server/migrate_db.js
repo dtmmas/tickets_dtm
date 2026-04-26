@@ -1,12 +1,8 @@
 const mysql = require('mysql2');
+const { dbConfig } = require('./env');
 
 // Configuración de la base de datos (alineada con server.js)
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'huberto051986',
-  database: 'ticket_system'
-});
+const db = mysql.createConnection(dbConfig);
 
 function queryAsync(sql, params = []) {
   return new Promise((resolve, reject) => {
