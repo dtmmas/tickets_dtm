@@ -11,6 +11,8 @@ const SettingsManager = ({ apiUrl, onClose }) => {
   const [faviconFile, setFaviconFile] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [success, setSuccess] = React.useState('');
+  const [showConfirmSave, setShowConfirmSave] = React.useState(false);
   const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
   const MAX_FAVICON_SIZE = 1024 * 1024; // 1MB
 
@@ -19,6 +21,7 @@ const SettingsManager = ({ apiUrl, onClose }) => {
   const fetchConfig = React.useCallback(async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       const resp = await fetch(`${apiUrl}/config`);
       const data = await resp.json();
@@ -35,10 +38,10 @@ const SettingsManager = ({ apiUrl, onClose }) => {
 
   React.useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
-  const handleSaveTexts = async (e) => {
-    e?.preventDefault?.();
+  const performSave = async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       // Si hay archivo de logo seleccionado, convertirlo a dataUrl
       let dataUrl;
@@ -92,24 +95,34 @@ const SettingsManager = ({ apiUrl, onClose }) => {
         setFaviconFile(null);
         applyFavicon(data.faviconUrl);
       }
+      setSuccess('Configuracion guardada correctamente');
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setShowConfirmSave(false);
     }
+  };
+
+  const handleSaveTexts = (e) => {
+    e?.preventDefault?.();
+    setShowConfirmSave(true);
   };
 
   const handleSelectLogo = (file) => {
     if (!file) { setLogoFile(null); return; }
     if (!['image/png', 'image/jpeg'].includes(file.type)) {
       setError('Formato no soportado. Use PNG o JPG');
+      setSuccess('');
       return;
     }
     if (file.size > MAX_LOGO_SIZE) {
       setError('La imagen excede el límite de 2MB');
+      setSuccess('');
       return;
     }
     setError('');
+    setSuccess('');
     setLogoFile(file);
   };
 
@@ -117,13 +130,16 @@ const SettingsManager = ({ apiUrl, onClose }) => {
     if (!file) { setFaviconFile(null); return; }
     if (!['image/png', 'image/x-icon', 'image/vnd.microsoft.icon'].includes(file.type)) {
       setError('El favicon debe ser PNG o ICO');
+      setSuccess('');
       return;
     }
     if (file.size > MAX_FAVICON_SIZE) {
       setError('El favicon excede el límite de 1MB');
+      setSuccess('');
       return;
     }
     setError('');
+    setSuccess('');
     setFaviconFile(file);
   };
 
@@ -138,6 +154,7 @@ const SettingsManager = ({ apiUrl, onClose }) => {
           </div>
           <div className="px-4 md:px-6 pt-4 pb-4">
             {error && <div className="bg-red-600 text-white px-3 py-2 rounded mb-3 text-sm">{error}</div>}
+              {success && <div className="bg-green-600 text-white px-3 py-2 rounded mb-3 text-sm">{success}</div>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Logo de la empresa</h3>
@@ -168,11 +185,11 @@ const SettingsManager = ({ apiUrl, onClose }) => {
                 <form onSubmit={handleSaveTexts} className="space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Nombre de la empresa</label>
-                    <input value={empresaNombre} onChange={(e)=>setEmpresaNombre(toUpperValue(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                    <input value={empresaNombre} onChange={(e)=>{ setEmpresaNombre(toUpperValue(e.target.value)); setSuccess(''); }} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Subtítulo del login</label>
-                    <input value={loginSubtitle} onChange={(e)=>setLoginSubtitle(toUpperValue(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                    <input value={loginSubtitle} onChange={(e)=>{ setLoginSubtitle(toUpperValue(e.target.value)); setSuccess(''); }} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
                   </div>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">Guardar</button>
@@ -184,6 +201,35 @@ const SettingsManager = ({ apiUrl, onClose }) => {
           </div>
         </div>
       </div>
+      {showConfirmSave && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !loading && setShowConfirmSave(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+            <div className="text-lg font-semibold text-gray-800 mb-2">Confirmar cambios</div>
+            <p className="text-sm text-gray-600 mb-4">
+              Se guardarán los cambios de configuración, incluyendo textos, logo e icono de la pestaña.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmSave(false)}
+                disabled={loading}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={performSave}
+                disabled={loading}
+                className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm"
+              >
+                {loading ? 'Guardando...' : 'Sí, guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
