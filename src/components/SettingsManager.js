@@ -1,6 +1,7 @@
 import React from 'react';
 
 const SettingsManager = ({ apiUrl, onClose }) => {
+  const toUpperValue = (value) => String(value || '').toUpperCase();
   const [empresaNombre, setEmpresaNombre] = React.useState('');
   const [loginSubtitle, setLoginSubtitle] = React.useState('');
   const [logoUrl, setLogoUrl] = React.useState('');
@@ -116,11 +117,11 @@ const SettingsManager = ({ apiUrl, onClose }) => {
                 <form onSubmit={handleSaveTexts} className="space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Nombre de la empresa</label>
-                    <input value={empresaNombre} onChange={(e)=>setEmpresaNombre(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                    <input value={empresaNombre} onChange={(e)=>setEmpresaNombre(toUpperValue(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Subtítulo del login</label>
-                    <input value={loginSubtitle} onChange={(e)=>setLoginSubtitle(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+                    <input value={loginSubtitle} onChange={(e)=>setLoginSubtitle(toUpperValue(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
                   </div>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">Guardar</button>

@@ -2,11 +2,14 @@ import React from 'react';
 import { computeDiff } from './auditUtils';
 
 // Componente para mostrar la lista de tickets
-const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTicket, apiUrl }) => {
-  const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
+const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTicket, apiUrl, permissions = {} }) => {
+  const toUpperValue = (value) => String(value || '').toUpperCase();
+  const {
+    canEditTickets = true,
+    canChangeTicketStatus = true,
+    canDeleteTickets = true,
+    canViewAudit = true
+  } = permissions;
 
   const formatDateParts = (dateString) => {
     try {
@@ -76,7 +79,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
   const [auditToDate, setAuditToDate] = React.useState('');
   const [auditPage, setAuditPage] = React.useState(1);
   const [auditLimit, setAuditLimit] = React.useState(20);
-  const [auditSort, setAuditSort] = React.useState('fecha_accion');
+  const auditSort = 'fecha_accion';
   const [auditOrder, setAuditOrder] = React.useState('DESC');
 
   const [expandedAuditId, setExpandedAuditId] = React.useState(null);
@@ -156,7 +159,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [confirmState.open, confirmState.onConfirm]);
+  }, [cancelReason, confirmState.context, confirmState.onConfirm, confirmState.open, confirmState.type]);
 
   const fetchAudit = async (ticketId, opts = {}) => {
     try {
@@ -286,7 +289,9 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                     <select
                       value={ticket.estado}
+                      disabled={!canChangeTicketStatus}
                       onChange={(e) => {
+                        if (!canChangeTicketStatus) return;
                         const nextEstado = e.target.value;
                         if (nextEstado === ticket.estado) return;
                         if (!isTransitionAllowed(ticket.estado, nextEstado)) {
@@ -306,7 +311,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                           });
                         }, 'warning', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion, from: ticket.estado, to: nextEstado }, 'status');
                       }}
-                      className={`text-xs rounded border px-2 py-1 bg-white`}
+                      className={`text-xs rounded border px-2 py-1 bg-white ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {estados.map((estado) => (
                         <option key={estado} value={estado} disabled={estado !== ticket.estado && !isTransitionAllowed(ticket.estado, estado)}>
@@ -318,33 +323,37 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                     <div className="flex gap-2">
                       <button
                         onClick={() => onEditTicket(ticket)}
-                        disabled={ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
-                        className={`p-1.5 rounded border ${(ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100' : 'border-gray-300 text-gray-700 bg-gray-100'}`}
+                        disabled={!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
+                        className={`p-1.5 rounded border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100' : 'border-gray-300 text-gray-700 bg-gray-100'}`}
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M4 20h4l10.606-10.606a2 2 0 10-2.828-2.828L5.172 17.172A4 4 0 004 20z" /></svg>
                       </button>
-                      <button
-                        onClick={() => {
-                          openConfirm('¿Seguro que deseas eliminar este ticket?', () => {
-                            onDeleteTicket(ticket.id);
-                            setLastAudit({
-                              action: 'eliminó',
-                              ticketId: ticket.id,
-                              by: getCurrentUsername(),
-                              at: Date.now(),
-                            });
-                          }, 'danger', { id: ticket.id, cliente: ticket.cliente }, 'delete');
-                        }}
-                        className="p-1.5 rounded border border-red-300 text-white bg-red-600"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-6 0h8m-9 4h10" /></svg>
-                      </button>
-                      <button
-                        onClick={() => openAudit(ticket)}
-                        className="p-1.5 rounded border border-blue-300 text-white bg-blue-600"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </button>
+                      {canDeleteTickets && (
+                        <button
+                          onClick={() => {
+                            openConfirm('¿Seguro que deseas eliminar este ticket?', () => {
+                              onDeleteTicket(ticket.id);
+                              setLastAudit({
+                                action: 'eliminó',
+                                ticketId: ticket.id,
+                                by: getCurrentUsername(),
+                                at: Date.now(),
+                              });
+                            }, 'danger', { id: ticket.id, cliente: ticket.cliente }, 'delete');
+                          }}
+                          className="p-1.5 rounded border border-red-300 text-white bg-red-600"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-6 0h8m-9 4h10" /></svg>
+                        </button>
+                      )}
+                      {canViewAudit && (
+                        <button
+                          onClick={() => openAudit(ticket)}
+                          className="p-1.5 rounded border border-blue-300 text-white bg-blue-600"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -401,7 +410,9 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">
                     <select
                       value={ticket.estado}
+                      disabled={!canChangeTicketStatus}
                       onChange={(e) => {
+                        if (!canChangeTicketStatus) return;
                         const nextEstado = e.target.value;
                         if (nextEstado === ticket.estado) return;
                         if (!isTransitionAllowed(ticket.estado, nextEstado)) {
@@ -421,7 +432,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                           });
                         }, 'warning', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion, from: ticket.estado, to: nextEstado }, 'status');
                       }}
-                      className={`rounded-md border px-3 py-2 text-sm ${getEstadoClasses(ticket.estado)}`}
+                      className={`rounded-md border px-3 py-2 text-sm ${getEstadoClasses(ticket.estado)} ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {estados.map((estado) => (
                         <option key={estado} value={estado} disabled={estado !== ticket.estado && !isTransitionAllowed(ticket.estado, estado)}>
@@ -435,44 +446,48 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       <button
                         onClick={() => onEditTicket(ticket)}
                         aria-label="Editar"
-                        disabled={ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
-                        className={`px-3 py-2 rounded-md border ${(ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed' : 'border-gray-300 text-gray-700 bg-gray-100 hover:bg-gray-200'}`}
-                        title={(ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'No editable (resuelto/cancelado)' : 'Editar'}
+                        disabled={!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
+                        className={`px-3 py-2 rounded-md border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed' : 'border-gray-300 text-gray-700 bg-gray-100 hover:bg-gray-200'}`}
+                        title={(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'No editable' : 'Editar'}
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M4 20h4l10.606-10.606a2 2 0 10-2.828-2.828L5.172 17.172A4 4 0 004 20z" />
                         </svg>
                       </button>
-                      <button
-                        onClick={() => {
-                          openConfirm('¿Seguro que deseas eliminar este ticket? Esta acción no se puede deshacer.', () => {
-                            onDeleteTicket(ticket.id);
-                            setLastAudit({
-                              action: 'eliminó',
-                              ticketId: ticket.id,
-                              by: getCurrentUsername(),
-                              at: Date.now(),
-                            });
-                          }, 'danger', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion }, 'delete');
-                        }}
-                        aria-label="Eliminar"
-                        className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700"
-                        title="Eliminar"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-6 0h8m-9 4h10" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => openAudit(ticket)}
-                        aria-label="Historial"
-                        className="px-3 py-2 rounded-md border border-blue-300 text-white bg-blue-600 hover:bg-blue-700"
-                        title="Ver historial"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
+                      {canDeleteTickets && (
+                        <button
+                          onClick={() => {
+                            openConfirm('¿Seguro que deseas eliminar este ticket? Esta acción no se puede deshacer.', () => {
+                              onDeleteTicket(ticket.id);
+                              setLastAudit({
+                                action: 'eliminó',
+                                ticketId: ticket.id,
+                                by: getCurrentUsername(),
+                                at: Date.now(),
+                              });
+                            }, 'danger', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion }, 'delete');
+                          }}
+                          aria-label="Eliminar"
+                          className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700"
+                          title="Eliminar"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-6 0h8m-9 4h10" />
+                          </svg>
+                        </button>
+                      )}
+                      {canViewAudit && (
+                        <button
+                          onClick={() => openAudit(ticket)}
+                          aria-label="Historial"
+                          className="px-3 py-2 rounded-md border border-blue-300 text-white bg-blue-600 hover:bg-blue-700"
+                          title="Ver historial"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -519,7 +534,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       <input
                         type="text"
                         value={cancelReason}
-                        onChange={(e) => setCancelReason(e.target.value)}
+                        onChange={(e) => setCancelReason(toUpperValue(e.target.value))}
                         placeholder="Escribe el motivo..."
                         className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs w-full"
                       />
@@ -581,7 +596,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   <input
                     type="text"
                     value={auditUserQuery}
-                    onChange={(e) => setAuditUserQuery(e.target.value)}
+                    onChange={(e) => setAuditUserQuery(toUpperValue(e.target.value))}
                     placeholder="Buscar por usuario"
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs w-44"
                   />

@@ -7,6 +7,14 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const { appBaseUrl, clientUrls, jwtSecret, poolConfig, port } = require('./env');
+const {
+  PERMISSION_GROUPS,
+  ALL_PERMISSIONS,
+  DEFAULT_ROLE_PERMISSIONS,
+  DEFAULT_ROLES,
+  normalizePermissions,
+  normalizeRoleName
+} = require('./permissions');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -93,7 +101,7 @@ function writeConfig(partial) {
 }
 
 // Middleware para verificar JWT
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   const token = req.headers['authorization'];
   
   if (!token) {
@@ -105,7 +113,14 @@ const verifyToken = (req, res, next) => {
   
   try {
     const decoded = jwt.verify(actualToken, jwtSecret);
-    req.user = decoded;
+    const userRow = await querySingle(
+      'SELECT id, username, nombre, email, rol, activo FROM usuarios WHERE id = ? AND activo = TRUE LIMIT 1',
+      [decoded.id]
+    );
+    if (!userRow) {
+      return res.status(401).json({ error: 'Usuario no disponible' });
+    }
+    req.user = await buildAuthUser(userRow);
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Token inválido' });
@@ -114,6 +129,91 @@ const verifyToken = (req, res, next) => {
 
 // Configuración de la conexión a MySQL (Pool)
 const db = mysql.createPool(poolConfig);
+const dbPromise = db.promise();
+
+const querySingle = async (sql, params = []) => {
+  const [rows] = await dbPromise.query(sql, params);
+  return rows && rows[0] ? rows[0] : null;
+};
+
+const queryRows = async (sql, params = []) => {
+  const [rows] = await dbPromise.query(sql, params);
+  return rows || [];
+};
+
+const hasPermission = (user, permission) => {
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return permissions.includes(permission);
+};
+
+const requirePermission = (permission) => (req, res, next) => {
+  if (!hasPermission(req.user, permission)) {
+    return res.status(403).json({ error: 'Permisos insuficientes' });
+  }
+  next();
+};
+
+const getLegacyRolePermissions = (roleName) => {
+  const normalized = normalizeRoleName(roleName);
+  return DEFAULT_ROLE_PERMISSIONS[normalized] || [];
+};
+
+const getRolePermissionsFromValue = (value) => {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return normalizePermissions(parsed);
+  } catch (_) {
+    return [];
+  }
+};
+
+const loadRoleByName = async (roleName) => {
+  const normalizedName = normalizeRoleName(roleName);
+  if (!normalizedName) return null;
+  const role = await querySingle(
+    'SELECT id, nombre, descripcion, permisos, activo, sistema, fecha_creacion, fecha_actualizacion FROM roles WHERE nombre = ? LIMIT 1',
+    [normalizedName]
+  );
+  if (!role) return null;
+  return {
+    ...role,
+    nombre: normalizeRoleName(role.nombre),
+    permisos: getRolePermissionsFromValue(role.permisos)
+  };
+};
+
+const buildAuthUser = async (userRow) => {
+  const roleName = normalizeRoleName(userRow?.rol);
+  const role = await loadRoleByName(roleName);
+  const permissions = role
+    ? (role.activo ? role.permisos : [])
+    : getLegacyRolePermissions(roleName);
+
+  return {
+    id: userRow.id,
+    username: userRow.username,
+    nombre: userRow.nombre,
+    email: userRow.email,
+    rol: roleName,
+    permissions,
+    role: role
+      ? {
+          id: role.id,
+          nombre: role.nombre,
+          descripcion: role.descripcion,
+          activo: !!role.activo,
+          sistema: !!role.sistema
+        }
+      : {
+          id: null,
+          nombre: roleName,
+          descripcion: '',
+          activo: true,
+          sistema: ['admin', 'tecnico', 'usuario'].includes(roleName)
+        }
+  };
+};
 
 // Probar conexión inicial y crear tablas
 db.getConnection((err, connection) => {
@@ -239,6 +339,47 @@ db.getConnection((err, connection) => {
     }
   });
 
+  // Crear tabla de roles y permisos
+  const createRolesTable = `
+    CREATE TABLE IF NOT EXISTS roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      nombre VARCHAR(50) NOT NULL UNIQUE,
+      descripcion VARCHAR(255) DEFAULT '',
+      permisos JSON NOT NULL,
+      activo BOOLEAN DEFAULT TRUE,
+      sistema BOOLEAN DEFAULT FALSE,
+      fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `;
+  db.query(createRolesTable, (err) => {
+    if (err) {
+      console.error('Error al crear tabla roles:', err);
+    } else {
+      console.log('Tabla roles creada o ya existente');
+      DEFAULT_ROLES.forEach((role) => {
+        const sql = `
+          INSERT INTO roles (nombre, descripcion, permisos, activo, sistema)
+          VALUES (?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            descripcion = VALUES(descripcion),
+            permisos = IF(sistema = TRUE, VALUES(permisos), permisos),
+            activo = IF(sistema = TRUE, VALUES(activo), activo),
+            sistema = VALUES(sistema)
+        `;
+        db.query(
+          sql,
+          [role.nombre, role.descripcion, JSON.stringify(role.permisos), role.activo, role.sistema],
+          (seedErr) => {
+            if (seedErr) {
+              console.error(`Error al asegurar rol ${role.nombre}:`, seedErr);
+            }
+          }
+        );
+      });
+    }
+  });
+
   // Crear tabla de usuarios si no existe (asegurar que exista para producción)
   const createUsersTable = `
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -258,6 +399,14 @@ db.getConnection((err, connection) => {
       console.error('Error al crear tabla usuarios:', err);
     } else {
       console.log('Tabla usuarios creada o ya existente');
+      db.query(
+        "ALTER TABLE usuarios MODIFY COLUMN rol VARCHAR(50) NOT NULL DEFAULT 'usuario'",
+        (alterErr) => {
+          if (alterErr) {
+            console.error('Error al actualizar columna rol de usuarios:', alterErr);
+          }
+        }
+      );
       // Verificar si existe el usuario admin por defecto
       db.query('SELECT COUNT(*) as count FROM usuarios', async (cErr, cRows) => {
         if (!cErr && cRows && cRows[0].count === 0) {
@@ -305,11 +454,8 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Actualizar textos de login y nombre de empresa y opcionalmente logo (solo admin)
-app.put('/api/config', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+// Actualizar textos de login y nombre de empresa y opcionalmente logo
+app.put('/api/config', verifyToken, requirePermission('settings.manage'), (req, res) => {
   const { empresaNombre = '', loginSubtitle = '', dataUrl } = req.body || {};
 
   // Guardar logo si viene incluido
@@ -390,11 +536,8 @@ app.put('/api/config', verifyToken, (req, res) => {
   });
 });
 
-// Subir logo de empresa vía data URL (solo admin)
-app.post('/api/config/logo', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+// Subir logo de empresa vía data URL
+app.post('/api/config/logo', verifyToken, requirePermission('settings.manage'), (req, res) => {
   const { dataUrl } = req.body || {};
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
     return res.status(400).json({ error: 'dataUrl inválido' });
@@ -437,32 +580,133 @@ app.post('/api/config/logo', verifyToken, (req, res) => {
   res.json({ ...cfg, logoUrl });
 });
 
-// Roles disponibles
-app.get('/api/roles', verifyToken, (req, res) => {
-  // Lista fija alineada con el esquema actual
-  res.json(['admin', 'tecnico', 'usuario']);
+// Catálogo de permisos
+app.get('/api/permissions', verifyToken, requirePermission('roles.manage'), (req, res) => {
+  res.json({ groups: PERMISSION_GROUPS, all: ALL_PERMISSIONS });
 });
 
-// Gestión de usuarios (solo admin, excepto cambio de contraseña propio)
-// Listar usuarios con búsqueda y paginación básica
-app.get('/api/users', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
+// Roles disponibles
+app.get('/api/roles', verifyToken, requirePermission('users.manage'), async (req, res) => {
+  try {
+    const includeInactive = String(req.query.include_inactivos || 'true') === 'true';
+    const params = [];
+    let where = '';
+    if (!includeInactive) {
+      where = 'WHERE activo = TRUE';
+    }
+    const roles = await queryRows(
+      `SELECT id, nombre, descripcion, permisos, activo, sistema, fecha_creacion, fecha_actualizacion
+       FROM roles ${where} ORDER BY sistema DESC, nombre ASC`,
+      params
+    );
+    res.json(
+      roles.map((role) => ({
+        ...role,
+        nombre: normalizeRoleName(role.nombre),
+        permisos: getRolePermissionsFromValue(role.permisos),
+        activo: !!role.activo,
+        sistema: !!role.sistema
+      }))
+    );
+  } catch (error) {
+    console.error('Error al listar roles:', error);
+    res.status(500).json({ error: 'Error al listar roles' });
   }
+});
+
+app.post('/api/roles', verifyToken, requirePermission('roles.manage'), async (req, res) => {
+  try {
+    const nombre = normalizeRoleName(req.body?.nombre);
+    const descripcion = String(req.body?.descripcion || '').trim();
+    const permisos = normalizePermissions(req.body?.permisos);
+    const activo = req.body?.activo !== false;
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre del rol es obligatorio' });
+    }
+    if (permisos.length === 0) {
+      return res.status(400).json({ error: 'Debe seleccionar al menos un permiso' });
+    }
+    const [result] = await dbPromise.query(
+      'INSERT INTO roles (nombre, descripcion, permisos, activo, sistema) VALUES (?, ?, ?, ?, FALSE)',
+      [nombre, descripcion, JSON.stringify(permisos), activo]
+    );
+    const created = await loadRoleByName(nombre);
+    res.status(201).json(created || { id: result.insertId, nombre, descripcion, permisos, activo, sistema: false });
+  } catch (error) {
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ya existe un rol con ese nombre' });
+    }
+    console.error('Error al crear rol:', error);
+    res.status(500).json({ error: 'Error al crear rol' });
+  }
+});
+
+app.put('/api/roles/:id', verifyToken, requirePermission('roles.manage'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentRole = await querySingle('SELECT * FROM roles WHERE id = ?', [id]);
+    if (!currentRole) {
+      return res.status(404).json({ error: 'Rol no encontrado' });
+    }
+    const nombre = normalizeRoleName(req.body?.nombre || currentRole.nombre);
+    const descripcion = String(req.body?.descripcion ?? currentRole.descripcion ?? '').trim();
+    const permisos = normalizePermissions(req.body?.permisos);
+    const activo = req.body?.activo !== false;
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre del rol es obligatorio' });
+    }
+    if (permisos.length === 0) {
+      return res.status(400).json({ error: 'Debe seleccionar al menos un permiso' });
+    }
+    if (currentRole.sistema && !activo) {
+      return res.status(400).json({ error: 'No se puede desactivar un rol del sistema' });
+    }
+    if (currentRole.sistema && nombre !== normalizeRoleName(currentRole.nombre)) {
+      return res.status(400).json({ error: 'No se puede renombrar un rol del sistema' });
+    }
+    await dbPromise.query(
+      'UPDATE roles SET nombre = ?, descripcion = ?, permisos = ?, activo = ? WHERE id = ?',
+      [nombre, descripcion, JSON.stringify(permisos), activo, id]
+    );
+    if (normalizeRoleName(currentRole.nombre) !== nombre) {
+      await dbPromise.query('UPDATE usuarios SET rol = ? WHERE rol = ?', [nombre, normalizeRoleName(currentRole.nombre)]);
+    }
+    const updated = await loadRoleByName(nombre);
+    res.json(updated);
+  } catch (error) {
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ya existe un rol con ese nombre' });
+    }
+    console.error('Error al actualizar rol:', error);
+    res.status(500).json({ error: 'Error al actualizar rol' });
+  }
+});
+
+// Gestión de usuarios
+// Listar usuarios con búsqueda y paginación básica
+app.get('/api/users', verifyToken, requirePermission('users.manage'), (req, res) => {
   const { search = '', include_inactivos = 'true', page = 1, limit = 50 } = req.query;
   const numericLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
   const numericPage = Math.max(1, parseInt(page, 10) || 1);
   const offset = (numericPage - 1) * numericLimit;
   const where = [];
   const params = [];
-  if (include_inactivos !== 'true') where.push('activo = TRUE');
+  if (include_inactivos !== 'true') where.push('u.activo = TRUE');
   if (search && search.trim()) {
-    where.push('(username LIKE ? OR nombre LIKE ? OR email LIKE ?)');
+    where.push('(u.username LIKE ? OR u.nombre LIKE ? OR u.email LIKE ?)');
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const countSql = `SELECT COUNT(*) AS total FROM usuarios ${whereClause}`;
-  const listSql = `SELECT id, username, nombre, email, rol, activo, fecha_creacion, fecha_actualizacion FROM usuarios ${whereClause} ORDER BY fecha_creacion DESC LIMIT ? OFFSET ?`;
+  const countSql = `SELECT COUNT(*) AS total FROM usuarios u ${whereClause}`;
+  const listSql = `
+    SELECT u.id, u.username, u.nombre, u.email, u.rol, u.activo, u.fecha_creacion, u.fecha_actualizacion,
+           r.id AS role_id, r.descripcion AS role_descripcion, r.activo AS role_activo, r.sistema AS role_sistema
+    FROM usuarios u
+    LEFT JOIN roles r ON r.nombre = u.rol
+    ${whereClause}
+    ORDER BY u.fecha_creacion DESC
+    LIMIT ? OFFSET ?
+  `;
   db.query(countSql, params, (cErr, cRows) => {
     if (cErr) {
       console.error('Error al contar usuarios:', cErr);
@@ -476,26 +720,31 @@ app.get('/api/users', verifyToken, (req, res) => {
       }
       res.set('Access-Control-Expose-Headers', 'X-Total-Count');
       res.set('X-Total-Count', String(total));
-      res.json({ items: rows, meta: { total, page: numericPage, limit: numericLimit } });
+      res.json({
+        items: rows.map((row) => ({
+          ...row,
+          activo: !!row.activo,
+          role_activo: row.role_activo == null ? null : !!row.role_activo,
+          role_sistema: row.role_sistema == null ? null : !!row.role_sistema
+        })),
+        meta: { total, page: numericPage, limit: numericLimit }
+      });
     });
   });
 });
 
 // Crear usuario
-app.post('/api/users', verifyToken, async (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+app.post('/api/users', verifyToken, requirePermission('users.manage'), async (req, res) => {
   const { username, password, nombre, email, rol = 'usuario', activo = true } = req.body || {};
   if (!username || !password || !nombre || !email) {
     return res.status(400).json({ error: 'username, password, nombre y email son obligatorios' });
   }
-  const allowedRoles = new Set(['admin', 'tecnico', 'usuario']);
-  const roleNorm = String(rol || '').toLowerCase();
-  if (!allowedRoles.has(roleNorm)) {
-    return res.status(400).json({ error: 'Rol inválido' });
-  }
   try {
+    const roleNorm = normalizeRoleName(rol);
+    const role = await loadRoleByName(roleNorm);
+    if (!role || !role.activo) {
+      return res.status(400).json({ error: 'Rol inválido o inactivo' });
+    }
     const hashed = await bcrypt.hash(password, 10);
     const insert = `INSERT INTO usuarios (username, password, nombre, email, rol, activo) VALUES (?, ?, ?, ?, ?, ?)`;
     db.query(insert, [username, hashed, nombre, email, roleNorm, !!activo], (err, result) => {
@@ -521,40 +770,42 @@ app.post('/api/users', verifyToken, async (req, res) => {
 });
 
 // Actualizar datos de usuario (no contraseña)
-app.put('/api/users/:id', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+app.put('/api/users/:id', verifyToken, requirePermission('users.manage'), async (req, res) => {
   const { id } = req.params;
   const { nombre, email, rol, activo } = req.body || {};
   if (!nombre || !email) {
     return res.status(400).json({ error: 'nombre y email son obligatorios' });
   }
-  const allowedRoles = new Set(['admin', 'tecnico', 'usuario']);
-  const roleNorm = String(rol || 'usuario').toLowerCase();
-  if (!allowedRoles.has(roleNorm)) {
-    return res.status(400).json({ error: 'Rol inválido' });
-  }
-  const update = `UPDATE usuarios SET nombre = ?, email = ?, rol = ?, activo = ? WHERE id = ?`;
-  db.query(update, [nombre, email, roleNorm, activo !== false, id], (err, result) => {
-    if (err) {
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({ error: 'Email ya existe' });
-      }
-      console.error('Error al actualizar usuario:', err);
-      return res.status(500).json({ error: 'Error al actualizar usuario: ' + err.message });
+  try {
+    const roleNorm = normalizeRoleName(rol || 'usuario');
+    const role = await loadRoleByName(roleNorm);
+    if (!role || !role.activo) {
+      return res.status(400).json({ error: 'Rol inválido o inactivo' });
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-    db.query('SELECT id, username, nombre, email, rol, activo, fecha_creacion, fecha_actualizacion FROM usuarios WHERE id = ?', [id], (gErr, rows) => {
-      if (gErr) {
-        console.error('Error al obtener usuario actualizado:', gErr);
-        return res.status(500).json({ error: 'Error al obtener usuario actualizado: ' + gErr.message });
+    const update = `UPDATE usuarios SET nombre = ?, email = ?, rol = ?, activo = ? WHERE id = ?`;
+    db.query(update, [nombre, email, roleNorm, activo !== false, id], (err, result) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(409).json({ error: 'Email ya existe' });
+        }
+        console.error('Error al actualizar usuario:', err);
+        return res.status(500).json({ error: 'Error al actualizar usuario: ' + err.message });
       }
-      res.json(rows[0]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+      db.query('SELECT id, username, nombre, email, rol, activo, fecha_creacion, fecha_actualizacion FROM usuarios WHERE id = ?', [id], (gErr, rows) => {
+        if (gErr) {
+          console.error('Error al obtener usuario actualizado:', gErr);
+          return res.status(500).json({ error: 'Error al obtener usuario actualizado: ' + gErr.message });
+        }
+        res.json(rows[0]);
+      });
     });
-  });
+  } catch (error) {
+    console.error('Error al validar rol del usuario:', error);
+    return res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
 });
 
 // Cambiar contraseña
@@ -565,7 +816,7 @@ app.patch('/api/users/:id/password', verifyToken, async (req, res) => {
   if (!newPassword || String(newPassword).length < 6) {
     return res.status(400).json({ error: 'La nueva contraseña es obligatoria y debe tener al menos 6 caracteres' });
   }
-  const isAdmin = String(requester?.rol || '').toLowerCase() === 'admin';
+  const isAdmin = hasPermission(requester, 'users.manage');
   const isSelf = String(requester?.id) === String(id);
   if (!isAdmin && !isSelf) {
     return res.status(403).json({ error: 'Permisos insuficientes' });
@@ -628,6 +879,8 @@ app.post('/api/login', (req, res) => {
         return res.status(401).json({ error: 'Credenciales inválidas' });
       }
       
+      const authUser = await buildAuthUser(user);
+
       // Crear JWT token
       const token = jwt.sign(
         { 
@@ -642,13 +895,7 @@ app.post('/api/login', (req, res) => {
       
       res.json({
         token,
-        user: {
-          id: user.id,
-          username: user.username,
-          nombre: user.nombre,
-          email: user.email,
-          rol: user.rol
-        }
+        user: authUser
       });
       
     } catch (error) {
@@ -660,12 +907,12 @@ app.post('/api/login', (req, res) => {
 
 // Ruta para verificar token
 app.get('/api/verify-token', verifyToken, (req, res) => {
-  res.json({ user: req.user });
+  res.json(req.user);
 });
 
 // CRUD Tipos de Soporte
 // Listar tipos de soporte con búsqueda y paginación opcional
-app.get('/api/tipos-soporte', verifyToken, (req, res) => {
+app.get('/api/tipos-soporte', verifyToken, requirePermission('tipos_soporte.view'), (req, res) => {
   const { search = '', page = 1, limit = 50, include_inactivos = 'false' } = req.query;
   const numericLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
   const numericPage = Math.max(1, parseInt(page, 10) || 1);
@@ -702,10 +949,7 @@ app.get('/api/tipos-soporte', verifyToken, (req, res) => {
 });
 
 // Crear tipo de soporte
-app.post('/api/tipos-soporte', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+app.post('/api/tipos-soporte', verifyToken, requirePermission('tipos_soporte.manage'), (req, res) => {
   const { nombre, descripcion = '' } = req.body;
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre es obligatorio' });
@@ -730,10 +974,7 @@ app.post('/api/tipos-soporte', verifyToken, (req, res) => {
 });
 
 // Actualizar tipo de soporte
-app.put('/api/tipos-soporte/:id', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+app.put('/api/tipos-soporte/:id', verifyToken, requirePermission('tipos_soporte.manage'), (req, res) => {
   const { id } = req.params;
   const { nombre, descripcion, activo } = req.body;
   if (!nombre || !nombre.trim()) {
@@ -762,10 +1003,7 @@ app.put('/api/tipos-soporte/:id', verifyToken, (req, res) => {
 });
 
 // Eliminar tipo de soporte
-app.delete('/api/tipos-soporte/:id', verifyToken, (req, res) => {
-  if (!req.user || String(req.user.rol).toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Permisos insuficientes' });
-  }
+app.delete('/api/tipos-soporte/:id', verifyToken, requirePermission('tipos_soporte.manage'), (req, res) => {
   const { id } = req.params;
   const del = `DELETE FROM tipos_soporte WHERE id = ?`;
   db.query(del, [id], (err, result) => {
@@ -781,7 +1019,7 @@ app.delete('/api/tipos-soporte/:id', verifyToken, (req, res) => {
 });
 
 // Ruta para obtener historial de auditoría (con filtros, orden y paginación opcional)
-app.get('/api/auditoria/:ticketId', verifyToken, (req, res) => {
+app.get('/api/auditoria/:ticketId', verifyToken, requirePermission('audit.view'), (req, res) => {
   const ticketId = req.params.ticketId;
 
   // Parámetros opcionales: ?accion=UPDATE&username=juan&page=1&limit=20&sort=fecha_accion&order=DESC
@@ -880,7 +1118,7 @@ app.get('/api/auditoria/:ticketId', verifyToken, (req, res) => {
 });
 
 // Obtener todos los tickets (ahora requiere autenticación)
-app.get('/api/tickets', verifyToken, (req, res) => {
+app.get('/api/tickets', verifyToken, requirePermission('tickets.view'), (req, res) => {
   const query = `
     SELECT t.*, u.nombre AS creador_nombre, u.username AS creador_username
     FROM tickets t
@@ -898,7 +1136,7 @@ app.get('/api/tickets', verifyToken, (req, res) => {
 });
 
 // Crear un nuevo ticket
-app.post('/api/tickets', verifyToken, (req, res) => {
+app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req, res) => {
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
   let { fechaProgramada } = req.body;
   const userId = req.user.id;
@@ -957,7 +1195,7 @@ app.post('/api/tickets', verifyToken, (req, res) => {
 });
 
 // Actualizar un ticket existente
-app.put('/api/tickets/:id', verifyToken, (req, res) => {
+app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req, res) => {
   const { id } = req.params;
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
   let { fechaProgramada } = req.body;
@@ -1039,7 +1277,7 @@ app.put('/api/tickets/:id', verifyToken, (req, res) => {
 });
 
 // Actualizar el estado de un ticket
-app.patch('/api/tickets/:id/estado', verifyToken, (req, res) => {
+app.patch('/api/tickets/:id/estado', verifyToken, requirePermission('tickets.change_status'), (req, res) => {
   const { id } = req.params;
   const { estado, motivo_cancelacion } = req.body;
   const userId = req.user.id;
@@ -1173,7 +1411,7 @@ app.patch('/api/tickets/:id/estado', verifyToken, (req, res) => {
 });
 
 // Eliminar un ticket
-app.delete('/api/tickets/:id', verifyToken, (req, res) => {
+app.delete('/api/tickets/:id', verifyToken, requirePermission('tickets.delete'), (req, res) => {
   const { id } = req.params;
   
   const query = 'DELETE FROM tickets WHERE id = ?';

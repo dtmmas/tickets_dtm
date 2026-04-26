@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Dashboard from './components/Dashboard';
 import TicketList from './components/TicketList';
 import TicketDialog from './components/TicketDialog';
@@ -7,6 +7,7 @@ import Login from './components/Login';
 import SettingsManager from './components/SettingsManager';
 import UsersManager from './components/UsersManager';
 import CalendarAgenda from './components/CalendarAgenda';
+import { hasPermission } from './permissions';
 
 // API URL
 // En producción, usamos path relativo para que funcione con cualquier IP/dominio
@@ -19,6 +20,7 @@ const estadosTicket = ['pendiente', 'resuelto', 'cancelado'];
 // UI con Tailwind: sin ThemeProvider ni componentes MUI a nivel de app
 
 function App() {
+  const toUpperValue = (value) => String(value || '').toUpperCase();
   // Estados de autenticación
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
@@ -39,7 +41,20 @@ function App() {
   const [showTipos, setShowTipos] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUsersManager, setShowUsersManager] = useState(false);
-  const isAdmin = String(user?.rol || user?.user?.rol || '').toLowerCase() === 'admin';
+  const canViewDashboard = hasPermission(user, 'dashboard.view');
+  const canViewTickets = hasPermission(user, 'tickets.view');
+  const canCreateTickets = hasPermission(user, 'tickets.create');
+  const canEditTickets = hasPermission(user, 'tickets.edit');
+  const canChangeTicketStatus = hasPermission(user, 'tickets.change_status');
+  const canDeleteTickets = hasPermission(user, 'tickets.delete');
+  const canViewCalendar = hasPermission(user, 'calendar.view') && canViewTickets;
+  const canViewAudit = hasPermission(user, 'audit.view');
+  const canViewSupportTypes = hasPermission(user, 'tipos_soporte.view');
+  const canManageSupportTypes = hasPermission(user, 'tipos_soporte.manage');
+  const canManageSettings = hasPermission(user, 'settings.manage');
+  const canManageUsers = hasPermission(user, 'users.manage');
+  const canManageRoles = hasPermission(user, 'roles.manage');
+  const canOpenUsersManager = canManageUsers || canManageRoles;
 
   // Filtros de listado
   const [filterEstado, setFilterEstado] = useState('');
@@ -81,15 +96,18 @@ function App() {
           if (response.ok) {
             const userData = await response.json();
             setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
             setIsAuthenticated(true);
             setAuthToken(token);
           } else {
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             setAuthToken(null);
           }
         } catch (error) {
           console.error('Error verificando token:', error);
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           setAuthToken(null);
         }
       }
@@ -114,13 +132,11 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
         setAuthToken(data.token);
         setUser(data.user);
         setIsAuthenticated(true);
         setError(null);
-        // Cargar tickets y tipos de soporte después del login
-        fetchTickets();
-        fetchTiposSoporte();
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Error al iniciar sesión');
@@ -136,15 +152,20 @@ function App() {
   // Función de logout
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setAuthToken(null);
     setUser(null);
     setIsAuthenticated(false);
     setTickets([]);
+    setTiposSoporte([]);
   };
 
   // Cargar tickets desde el backend
-  const fetchTickets = async () => {
-    if (!authToken) return;
+  const fetchTickets = useCallback(async () => {
+    if (!authToken || !canViewTickets) {
+      setTickets([]);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -167,11 +188,14 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken, canViewTickets]);
 
   // Cargar tipos de soporte desde el backend
-  const fetchTiposSoporte = async () => {
-    if (!authToken) return;
+  const fetchTiposSoporte = useCallback(async () => {
+    if (!authToken || !canViewSupportTypes) {
+      setTiposSoporte([]);
+      return;
+    }
     
     try {
       const response = await fetch(`${API_URL}/tipos-soporte`, {
@@ -195,20 +219,26 @@ function App() {
         { id: 3, nombre: 'Otro' }
       ]);
     }
-  };
+  }, [authToken, canViewSupportTypes]);
 
   // Cargar tickets cuando el usuario esté autenticado
   useEffect(() => {
-    if (isAuthenticated && authToken) {
+    if (isAuthenticated && authToken && user) {
       fetchTickets();
       fetchTiposSoporte();
     }
-  }, [isAuthenticated, authToken]);
+  }, [isAuthenticated, authToken, user, fetchTickets, fetchTiposSoporte]);
 
   // Cargar tickets al iniciar
   useEffect(() => {
     fetchTickets();
-  }, []);
+  }, [fetchTickets]);
+
+  useEffect(() => {
+    if (viewMode === 'calendario' && !canViewCalendar) {
+      setViewMode('lista');
+    }
+  }, [viewMode, canViewCalendar]);
 
   // Actualizar estadísticas cuando cambian los tickets
   useEffect(() => {
@@ -223,18 +253,28 @@ function App() {
 
   // Abrir diálogo para crear un nuevo ticket
   const handleAddTicket = () => {
+    if (!canCreateTickets) return;
     setCurrentTicket(null);
     setOpenDialog(true);
   };
 
   // Abrir diálogo para editar un ticket existente
   const handleEditTicket = (ticket) => {
+    if (!canEditTickets) return;
     setCurrentTicket(ticket);
     setOpenDialog(true);
   };
 
   // Guardar un ticket (nuevo o editado)
   const handleSaveTicket = async (ticketData) => {
+    if (!ticketData?.id && !canCreateTickets) {
+      setError('No tienes permiso para crear tickets.');
+      return;
+    }
+    if (ticketData?.id && !canEditTickets) {
+      setError('No tienes permiso para editar tickets.');
+      return;
+    }
     try {
       setLoading(true);
       
@@ -289,6 +329,10 @@ function App() {
 
   // Actualizar el estado de un ticket (incluye motivo de cancelación)
   const handleUpdateStatus = async (id, nuevoEstado, motivoCancelacion) => {
+    if (!canChangeTicketStatus) {
+      setError('No tienes permiso para cambiar el estado de tickets.');
+      return;
+    }
     try {
       setLoading(true);
       
@@ -327,6 +371,10 @@ function App() {
 
   // Eliminar un ticket
   const handleDeleteTicket = async (id) => {
+    if (!canDeleteTickets) {
+      setError('No tienes permiso para eliminar tickets.');
+      return;
+    }
     try {
       setLoading(true);
       
@@ -366,12 +414,12 @@ function App() {
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center">
               <div className="font-semibold text-lg text-gray-800 flex-1">Sistema de Tickets de Soporte DTM Jacaltenango</div>
               <div className="text-sm text-gray-600 mr-4">Bienvenido, {user?.nombre || user?.user?.nombre}</div>
-              {isAdmin && (
+              {canManageSupportTypes && (
                 <button onClick={() => setShowTipos(true)} className="text-sm px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white mr-3">
                   Tipos de Soporte
                 </button>
               )}
-              {isAdmin && (
+              {canManageSettings && (
                 <button onClick={() => setShowSettings(true)} className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white mr-3">
                   Configuración
                 </button>
@@ -384,12 +432,15 @@ function App() {
           
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="w-full mx-auto mt-4 mb-4 px-6 flex flex-col h-full min-h-0">
+              {canViewDashboard && (
               <div className="flex-none mb-4">
                 <Dashboard 
                   estadisticas={estadisticas} 
                   onAddTicket={handleAddTicket} 
+                  canCreateTicket={canCreateTickets}
                 />
               </div>
+              )}
               
               <div className="flex-1 flex flex-col min-h-0 bg-white rounded-lg shadow overflow-hidden relative">
                 {loading && (
@@ -406,7 +457,7 @@ function App() {
                       <input
                         type="text"
                         value={filterQuery}
-                        onChange={(e) => setFilterQuery(e.target.value)}
+                        onChange={(e) => setFilterQuery(toUpperValue(e.target.value))}
                         placeholder="Nombre del cliente o teléfono"
                         className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                       />
@@ -456,6 +507,7 @@ function App() {
                         <button
                           type="button"
                           onClick={() => setViewMode('lista')}
+                          disabled={!canViewTickets}
                           className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='lista' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
                         >
                           Lista
@@ -463,6 +515,7 @@ function App() {
                         <button
                           type="button"
                           onClick={() => setViewMode('calendario')}
+                          disabled={!canViewCalendar}
                           className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='calendario' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
                         >
                           Calendario
@@ -473,7 +526,11 @@ function App() {
                 </div>
 
                 <div className="flex-1 overflow-hidden relative">
-                  {viewMode === 'lista' ? (
+                  {!canViewTickets ? (
+                    <div className="h-full flex items-center justify-center p-6 text-center text-gray-500">
+                      No tienes permisos para ver tickets con este rol.
+                    </div>
+                  ) : viewMode === 'lista' ? (
                     <div className="absolute inset-0 overflow-hidden">
                       <TicketList 
                         tickets={filteredTickets} 
@@ -482,6 +539,12 @@ function App() {
                         onUpdateStatus={handleUpdateStatus}
                         onDeleteTicket={handleDeleteTicket}
                         apiUrl={API_URL}
+                        permissions={{
+                          canEditTickets,
+                          canChangeTicketStatus,
+                          canDeleteTickets,
+                          canViewAudit
+                        }}
                       />
                     </div>
                   ) : (
@@ -506,10 +569,10 @@ function App() {
             loading={loading}
           />
 
-          {showTipos && isAdmin && (
+          {showTipos && canManageSupportTypes && (
             <TiposSoporteManager apiUrl={API_URL} onClose={() => setShowTipos(false)} />
           )}
-              {isAuthenticated && isAdmin && (
+              {isAuthenticated && canOpenUsersManager && (
                 <div className="fixed bottom-6 right-6 z-40">
                   <button
                     onClick={() => setShowUsersManager(true)}
@@ -524,7 +587,7 @@ function App() {
                 <SettingsManager apiUrl={API_URL} onClose={() => setShowSettings(false)} />
               )}
               {showUsersManager && (
-                <UsersManager apiUrl={API_URL} onClose={() => setShowUsersManager(false)} />
+                <UsersManager apiUrl={API_URL} onClose={() => setShowUsersManager(false)} currentUser={user} />
               )}
           
           {error && (

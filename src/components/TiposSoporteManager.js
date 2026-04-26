@@ -1,6 +1,7 @@
 import React from 'react';
 
 const TiposSoporteManager = ({ apiUrl, onClose }) => {
+  const toUpperValue = (value) => String(value || '').toUpperCase();
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -114,7 +115,7 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
             <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-3">
               <div className="w-full sm:w-auto">
                 <label className="sr-only">Buscar</label>
-                <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar por nombre o descripción" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" />
+                <input value={search} onChange={(e)=>setSearch(toUpperValue(e.target.value))} placeholder="Buscar por nombre o descripción" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" />
               </div>
               <button onClick={()=>fetchItems({ page: 1, search })} className="w-full sm:w-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 text-sm transition">Buscar</button>
             </div>
@@ -186,11 +187,11 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Nombre</label>
-                    <input value={form.nombre} onChange={(e)=>setForm({...form, nombre: (e.target.value || '').toUpperCase()})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" required />
+                    <input value={form.nombre} onChange={(e)=>setForm({...form, nombre: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" required />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Descripción</label>
-                    <textarea value={form.descripcion} onChange={(e)=>setForm({...form, descripcion: (e.target.value || '').toUpperCase()})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" rows={3} />
+                    <textarea value={form.descripcion} onChange={(e)=>setForm({...form, descripcion: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" rows={3} />
                   </div>
                   <div className="flex items-center gap-2">
                     <input id="activo" type="checkbox" checked={form.activo} onChange={(e)=>setForm({...form, activo: e.target.checked})} />

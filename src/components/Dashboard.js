@@ -15,18 +15,20 @@ const StatCard = ({ title, value, color }) => (
 // ... existing code ...
 
 // Componente principal del Dashboard
-const Dashboard = ({ estadisticas, onAddTicket }) => {
+const Dashboard = ({ estadisticas, onAddTicket, canCreateTicket = true }) => {
   return (
     <div className="mt-2">
       <div className="flex justify-between items-center mb-3">
         <h1 className="text-2xl font-semibold text-gray-800">Dashboard</h1>
-        <button
-          onClick={onAddTicket}
-          className="inline-flex items-center rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5"
-        >
-          <span className="text-lg mr-2">＋</span>
-          Nuevo Ticket
-        </button>
+        {canCreateTicket && (
+          <button
+            onClick={onAddTicket}
+            className="inline-flex items-center rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5"
+          >
+            <span className="text-lg mr-2">+</span>
+            Nuevo Ticket
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <StatCard title="Total de Tickets" value={estadisticas.total} color="#2196f3" />
