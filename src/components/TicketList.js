@@ -1,6 +1,7 @@
 import React from 'react';
 import { computeDiff } from './auditUtils';
 import { DEFAULT_BRAND } from '../branding';
+import { formatDateTimeDisplay, formatTimeDisplay } from '../datetime';
 
 // Componente para mostrar la lista de tickets
 const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTicket, apiUrl, permissions = {}, brandPalette = DEFAULT_BRAND }) => {
@@ -16,12 +17,18 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
     try {
       const d = new Date(dateString);
       const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      const time = formatTimeDisplay(dateString);
       return { date, time };
     } catch (_) {
       return { date: String(dateString || ''), time: '' };
     }
   };
+
+  const buildMapUrl = (latitud, longitud) =>
+    `https://www.google.com/maps?q=${encodeURIComponent(`${latitud},${longitud}`)}&t=k`;
+
+  const hasCoordinates = (ticket) =>
+    ticket && ticket.latitud !== null && ticket.latitud !== undefined && ticket.longitud !== null && ticket.longitud !== undefined;
 
   const getEstadoClasses = (estado) => {
     switch (estado) {
@@ -91,9 +98,12 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
 
   const friendlyFieldNames = {
     cliente: 'Cliente',
+    direccion: 'Dirección',
     telefono: 'Teléfono',
     descripcion: 'Descripción',
     tipoSoporte: 'Tipo de Soporte',
+    latitud: 'Latitud',
+    longitud: 'Longitud',
     estado: 'Estado',
     fechaProgramada: 'Fecha Programada',
     motivo_cancelacion: 'Motivo de Cancelación',
@@ -119,6 +129,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
   const formatAuditValue = (key, value) => {
     if (value === null || value === undefined || value === '') return <em>(vacío)</em>;
     if (key === 'activo') return value ? 'Sí' : 'No';
+    if (key === 'fechaProgramada') return formatDateTimeDisplay(value) || <em>(vacío)</em>;
+    if (key === 'latitud' || key === 'longitud') return Number(value).toFixed(7);
     if (key.includes('fecha') || key === 'created_at') {
       try {
         return new Date(value).toLocaleString();
@@ -316,7 +328,21 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                     </div>
                     {ticket.fechaProgramada && (
                       <div className="col-span-2">
-                        <span className="font-medium">Programado:</span> {new Date(ticket.fechaProgramada).toLocaleString()}
+                        <span className="font-medium">Programado:</span> {formatDateTimeDisplay(ticket.fechaProgramada)}
+                      </div>
+                    )}
+                    {hasCoordinates(ticket) && (
+                      <div className="col-span-2">
+                        <span className="font-medium">Ubicación:</span>{' '}
+                        <a
+                          href={buildMapUrl(ticket.latitud, ticket.longitud)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold"
+                          style={{ color: brandPalette.deep }}
+                        >
+                          Ver mapa satelital
+                        </a>
                       </div>
                     )}
                   </div>
@@ -428,9 +454,22 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.id}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.cliente}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.telefono || '—'}</td>
-                  <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top whitespace-pre-line break-words">{ticket.descripcion}</td>
+                  <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top whitespace-pre-line break-words">
+                    <div>{ticket.descripcion}</div>
+                    {hasCoordinates(ticket) && (
+                      <a
+                        href={buildMapUrl(ticket.latitud, ticket.longitud)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                        style={{ backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+                      >
+                        Ver mapa satelital
+                      </a>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.tipoSoporte}</td>
-                  <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.fechaProgramada ? new Date(ticket.fechaProgramada).toLocaleString() : '—'}</td>
+                  <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.fechaProgramada ? formatDateTimeDisplay(ticket.fechaProgramada) : '—'}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.estado === 'cancelado' ? (ticket.motivo_cancelacion || '—') : '—'}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.creador_nombre || '—'}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">

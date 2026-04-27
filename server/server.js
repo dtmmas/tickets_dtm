@@ -283,6 +283,8 @@ db.getConnection((err, connection) => {
       telefono VARCHAR(20) NOT NULL,
       descripcion TEXT NOT NULL,
       tipoSoporte VARCHAR(50) NOT NULL,
+      latitud DECIMAL(10,7) DEFAULT NULL,
+      longitud DECIMAL(10,7) DEFAULT NULL,
       estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
       precio DECIMAL(10,2) DEFAULT NULL,
       cobro_aplica BOOLEAN DEFAULT FALSE,
@@ -328,6 +330,34 @@ db.getConnection((err, connection) => {
               console.error('Error al agregar columna fechaProgramada:', aErr);
             } else {
               console.log('Columna fechaProgramada agregada a tickets');
+            }
+          });
+        }
+      });
+      const latCheck = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tickets' AND COLUMN_NAME = 'latitud'`;
+      db.query(latCheck, (latErr, latRows) => {
+        if (latErr) {
+          console.error('Error al verificar columna latitud:', latErr);
+        } else if (!Array.isArray(latRows) || latRows.length === 0) {
+          db.query(`ALTER TABLE tickets ADD COLUMN latitud DECIMAL(10,7) DEFAULT NULL`, (alterErr) => {
+            if (alterErr) {
+              console.error('Error al agregar columna latitud:', alterErr);
+            } else {
+              console.log('Columna latitud agregada a tickets');
+            }
+          });
+        }
+      });
+      const lngCheck = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tickets' AND COLUMN_NAME = 'longitud'`;
+      db.query(lngCheck, (lngErr, lngRows) => {
+        if (lngErr) {
+          console.error('Error al verificar columna longitud:', lngErr);
+        } else if (!Array.isArray(lngRows) || lngRows.length === 0) {
+          db.query(`ALTER TABLE tickets ADD COLUMN longitud DECIMAL(10,7) DEFAULT NULL`, (alterErr) => {
+            if (alterErr) {
+              console.error('Error al agregar columna longitud:', alterErr);
+            } else {
+              console.log('Columna longitud agregada a tickets');
             }
           });
         }
@@ -1159,6 +1189,51 @@ app.get('/api/auditoria/:ticketId', verifyToken, requirePermission('audit.view')
   });
 });
 
+const padDatePart = (value) => String(value).padStart(2, '0');
+
+const toSqlDateTimeString = (input) => {
+  if (!input) return null;
+
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) return null;
+    return `${input.getFullYear()}-${padDatePart(input.getMonth() + 1)}-${padDatePart(input.getDate())} ${padDatePart(input.getHours())}:${padDatePart(input.getMinutes())}:${padDatePart(input.getSeconds())}`;
+  }
+
+  const stringValue = String(input).trim();
+  const match = stringValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/
+  );
+
+  if (match) {
+    const [, yyyy, mm, dd, hh = '00', mi = '00', ss = '00'] = match;
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  }
+
+  const parsed = new Date(stringValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return `${parsed.getFullYear()}-${padDatePart(parsed.getMonth() + 1)}-${padDatePart(parsed.getDate())} ${padDatePart(parsed.getHours())}:${padDatePart(parsed.getMinutes())}:${padDatePart(parsed.getSeconds())}`;
+};
+
+const formatTicketRow = (row) => {
+  if (!row) return row;
+
+  return {
+    ...row,
+    latitud: row.latitud === null || row.latitud === undefined ? null : Number(row.latitud),
+    longitud: row.longitud === null || row.longitud === undefined ? null : Number(row.longitud),
+    fechaProgramada: toSqlDateTimeString(row.fechaProgramada),
+    fechaCreacion: toSqlDateTimeString(row.fechaCreacion)
+  };
+};
+
+const normalizeCoordinate = (value, { min, max }) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < min || numeric > max) return NaN;
+  return Number(numeric.toFixed(7));
+};
+
 // Obtener todos los tickets (ahora requiere autenticación)
 app.get('/api/tickets', verifyToken, requirePermission('tickets.view'), (req, res) => {
   const query = `
@@ -1173,14 +1248,14 @@ app.get('/api/tickets', verifyToken, requirePermission('tickets.view'), (req, re
       console.error('Error al obtener tickets:', err);
       return res.status(500).json({ error: 'Error al obtener tickets' });
     }
-    res.json(results);
+    res.json(results.map(formatTicketRow));
   });
 });
 
 // Crear un nuevo ticket
 app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req, res) => {
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
-  let { fechaProgramada } = req.body;
+  let { fechaProgramada, latitud, longitud } = req.body;
   const userId = req.user.id;
   
   if (!cliente || !direccion || !telefono || !descripcion || !tipoSoporte) {
@@ -1189,32 +1264,23 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
   // Estado por defecto sin flujo de cobro/pago
   const computedEstado = 'pendiente';
 
-  // Normalizar fechaProgramada a formato MySQL DATETIME
-  const normalizeDateTime = (input) => {
-    try {
-      if (!input) return null;
-      const d = new Date(input);
-      if (isNaN(d.getTime())) return null;
-      const pad = (n) => String(n).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      const mm = pad(d.getMonth() + 1);
-      const dd = pad(d.getDate());
-      const hh = pad(d.getHours());
-      const mi = pad(d.getMinutes());
-      const ss = pad(d.getSeconds());
-      return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
-    } catch (_) {
-      return null;
-    }
-  };
-  const fpSql = normalizeDateTime(fechaProgramada);
+  const fpSql = toSqlDateTimeString(fechaProgramada);
+  const normalizedLat = normalizeCoordinate(latitud, { min: -90, max: 90 });
+  const normalizedLng = normalizeCoordinate(longitud, { min: -180, max: 180 });
+
+  if (Number.isNaN(normalizedLat) || Number.isNaN(normalizedLng)) {
+    return res.status(400).json({ error: 'Las coordenadas ingresadas no son válidas' });
+  }
+  if ((normalizedLat === null) !== (normalizedLng === null)) {
+    return res.status(400).json({ error: 'Debe ingresar latitud y longitud juntas' });
+  }
   
   const query = `
-    INSERT INTO tickets (cliente, direccion, telefono, descripcion, tipoSoporte, estado, fechaProgramada, creado_por, modificado_por)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tickets (cliente, direccion, telefono, descripcion, tipoSoporte, latitud, longitud, estado, fechaProgramada, creado_por, modificado_por)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
-  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, computedEstado, fpSql, userId, userId], (err, result) => {
+  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, computedEstado, fpSql, userId, userId], (err, result) => {
     if (err) {
       console.error('Error al crear ticket:', err);
       return res.status(500).json({ error: 'Error al crear ticket' });
@@ -1231,7 +1297,7 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
         console.error('Error al obtener ticket creado:', err);
         return res.status(500).json({ error: 'Error al obtener ticket creado' });
       }
-      res.status(201).json(results[0]);
+      res.status(201).json(formatTicketRow(results[0]));
     });
   });
 });
@@ -1240,38 +1306,28 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
 app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req, res) => {
   const { id } = req.params;
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
-  let { fechaProgramada } = req.body;
+  let { fechaProgramada, latitud, longitud } = req.body;
   const userId = req.user.id;
   
   if (!cliente || !direccion || !telefono || !descripcion || !tipoSoporte) {
     return res.status(400).json({ error: 'Todos los campos son obligatorios' });
   }
-  // Normalizar fechaProgramada a formato MySQL DATETIME
-  const normalizeDateTime = (input) => {
-    try {
-      if (!input) return null;
-      const d = new Date(input);
-      if (isNaN(d.getTime())) return null;
-      const pad = (n) => String(n).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      const mm = pad(d.getMonth() + 1);
-      const dd = pad(d.getDate());
-      const hh = pad(d.getHours());
-      const mi = pad(d.getMinutes());
-      const ss = pad(d.getSeconds());
-      return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
-    } catch (_) {
-      return null;
-    }
-  };
-  const fpSql = normalizeDateTime(fechaProgramada);
+  const fpSql = toSqlDateTimeString(fechaProgramada);
+  const normalizedLat = normalizeCoordinate(latitud, { min: -90, max: 90 });
+  const normalizedLng = normalizeCoordinate(longitud, { min: -180, max: 180 });
+  if (Number.isNaN(normalizedLat) || Number.isNaN(normalizedLng)) {
+    return res.status(400).json({ error: 'Las coordenadas ingresadas no son válidas' });
+  }
+  if ((normalizedLat === null) !== (normalizedLng === null)) {
+    return res.status(400).json({ error: 'Debe ingresar latitud y longitud juntas' });
+  }
   const query = `
     UPDATE tickets
-    SET cliente = ?, direccion = ?, telefono = ?, descripcion = ?, tipoSoporte = ?, fechaProgramada = ?, modificado_por = ?
+    SET cliente = ?, direccion = ?, telefono = ?, descripcion = ?, tipoSoporte = ?, latitud = ?, longitud = ?, fechaProgramada = ?, modificado_por = ?
     WHERE id = ? AND estado <> 'resuelto' AND estado <> 'cancelado'
   `;
   
-  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, fpSql, userId, id], (err, result) => {
+  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, fpSql, userId, id], (err, result) => {
     if (err) {
       console.error('Error al actualizar ticket:', err);
       return res.status(500).json({ error: 'Error al actualizar ticket' });
@@ -1310,7 +1366,7 @@ app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req
         console.error('Error al obtener ticket actualizado:', err);
         return res.status(500).json({ error: 'Error al obtener ticket actualizado' });
       }
-      res.json(results[0]);
+      res.json(formatTicketRow(results[0]));
     });
     }
     
@@ -1445,7 +1501,7 @@ app.patch('/api/tickets/:id/estado', verifyToken, requirePermission('tickets.cha
             console.error('Error al obtener ticket actualizado:', getErr);
             return res.status(500).json({ error: 'Error al obtener ticket actualizado' });
           }
-          res.json(results[0]);
+          res.json(formatTicketRow(results[0]));
         });
       }
     });

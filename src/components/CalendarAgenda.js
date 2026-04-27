@@ -1,4 +1,5 @@
 import React from 'react';
+import { getDateOnlyKey } from '../datetime';
 
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
@@ -31,9 +32,8 @@ const CalendarAgenda = ({ tickets, onSelectTicket }) => {
     const map = new Map();
     tickets.forEach(t => {
       if (!t.fechaProgramada) return;
-      const d = new Date(t.fechaProgramada);
-      if (isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const key = getDateOnlyKey(t.fechaProgramada);
+      if (!key) return;
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     });
@@ -65,7 +65,7 @@ const CalendarAgenda = ({ tickets, onSelectTicket }) => {
         {weeks.map((week, wi) => (
           <React.Fragment key={wi}>
             {week.map((day, di) => {
-              const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+              const key = getDateOnlyKey(day);
               const items = ticketsByDay.get(key) || [];
               const inMonth = day.getMonth() === current.getMonth();
               return (
@@ -101,4 +101,3 @@ const CalendarAgenda = ({ tickets, onSelectTicket }) => {
 };
 
 export default CalendarAgenda;
-

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Dashboard from './components/Dashboard';
 import TicketList from './components/TicketList';
 import TicketDialog from './components/TicketDialog';
@@ -48,6 +48,10 @@ function App() {
     logoUrl: ''
   });
   const [brandPalette, setBrandPalette] = useState(DEFAULT_BRAND);
+  const [showTopActions, setShowTopActions] = useState(true);
+  const mainScrollRef = useRef(null);
+  const lastScrollTopRef = useRef(0);
+  const topActionsLockUntilRef = useRef(0);
   const canViewDashboard = hasPermission(user, 'dashboard.view');
   const canViewTickets = hasPermission(user, 'tickets.view');
   const canCreateTickets = hasPermission(user, 'tickets.create');
@@ -285,6 +289,61 @@ function App() {
     }
   }, [viewMode, canViewCalendar]);
 
+  const revealTopActions = useCallback(() => {
+    const scrollNode = mainScrollRef.current;
+    topActionsLockUntilRef.current = Date.now() + 450;
+    setShowTopActions(true);
+    if (scrollNode) {
+      lastScrollTopRef.current = scrollNode.scrollTop;
+    }
+  }, []);
+
+  useEffect(() => {
+    const scrollNode = mainScrollRef.current;
+    if (!scrollNode) return;
+
+    const syncTopActionsByViewport = () => {
+      if (window.innerWidth >= 768) {
+        setShowTopActions(true);
+      }
+    };
+
+    const handleScroll = () => {
+      if (window.innerWidth >= 768) {
+        setShowTopActions(true);
+        lastScrollTopRef.current = scrollNode.scrollTop;
+        return;
+      }
+
+      if (Date.now() < topActionsLockUntilRef.current) {
+        lastScrollTopRef.current = scrollNode.scrollTop;
+        return;
+      }
+
+      const currentScrollTop = scrollNode.scrollTop;
+      const delta = currentScrollTop - lastScrollTopRef.current;
+
+      if (currentScrollTop <= 8) {
+        setShowTopActions(true);
+      } else if (delta > 12) {
+        setShowTopActions(false);
+      } else if (delta < -12) {
+        setShowTopActions(true);
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
+    };
+
+    syncTopActionsByViewport();
+    scrollNode.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', syncTopActionsByViewport);
+
+    return () => {
+      scrollNode.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', syncTopActionsByViewport);
+    };
+  }, [isAuthenticated]);
+
   // Actualizar estadísticas cuando cambian los tickets
   useEffect(() => {
     const stats = {
@@ -498,35 +557,76 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    Bienvenido, <span className="font-semibold text-slate-800">{user?.nombre || user?.user?.nombre}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-              {canManageSupportTypes && (
-                <button
-                  onClick={() => setShowTipos(true)}
-                  className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl text-white transition"
-                  style={{ backgroundColor: brandPalette.primary, boxShadow: `0 10px 24px ${brandPalette.softer}` }}
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-out"
+                  style={{
+                    maxHeight: showTopActions ? '220px' : '0px',
+                    opacity: showTopActions ? 1 : 0
+                  }}
                 >
-                  Tipos de Soporte
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end pt-1">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    Bienvenido, <span className="font-semibold text-slate-800">{user?.nombre || user?.user?.nombre}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                {canManageSupportTypes && (
+                  <button
+                    onClick={() => setShowTipos(true)}
+                    className="inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center sm:gap-2 text-sm px-0 sm:px-3 py-0 sm:py-2 rounded-xl text-white transition"
+                    style={{ backgroundColor: brandPalette.primary, boxShadow: `0 10px 24px ${brandPalette.softer}` }}
+                    title="Tipos de Soporte"
+                    aria-label="Tipos de Soporte"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                    </svg>
+                    <span className="hidden sm:inline">Tipos de Soporte</span>
+                  </button>
+                )}
+                {canManageSettings && (
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center sm:gap-2 text-sm px-0 sm:px-3 py-0 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition"
+                    title="Configuración"
+                    aria-label="Configuración"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 3.75l.85 2.35a6.95 6.95 0 011.77.73l2.3-.94 1.5 2.6-1.83 1.66c.08.6.08 1.1 0 1.7l1.83 1.66-1.5 2.6-2.3-.94c-.55.32-1.15.56-1.77.73L12 20.25l-2.35-.85a6.95 6.95 0 01-1.77-.73l-2.3.94-1.5-2.6 1.83-1.66a7.7 7.7 0 010-1.7L4.08 8.5l1.5-2.6 2.3.94c.55-.32 1.15-.56 1.77-.73L12 3.75z" />
+                      <circle cx="12" cy="12" r="2.75" strokeWidth="1.8" />
+                    </svg>
+                    <span className="hidden sm:inline">Configuración</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center sm:gap-2 text-sm px-0 sm:px-3 py-0 sm:py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition"
+                  title="Cerrar Sesión"
+                  aria-label="Cerrar Sesión"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 20H6a2 2 0 01-2-2V6a2 2 0 012-2h7" />
+                  </svg>
+                  <span className="hidden sm:inline">Cerrar Sesión</span>
                 </button>
-              )}
-              {canManageSettings && (
-                <button onClick={() => setShowSettings(true)} className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition">
-                  Configuración
-                </button>
-              )}
-              <button onClick={handleLogout} className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition">
-                Cerrar Sesión
-              </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </header>
           
-          <main className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden">
+          {!showTopActions && (
+            <button
+              type="button"
+              onClick={revealTopActions}
+              className="fixed top-[76px] right-4 z-30 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow md:hidden"
+            >
+              Mostrar acciones
+            </button>
+          )}
+
+          <main ref={mainScrollRef} className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden">
             <div className="w-full mx-auto mt-4 mb-4 px-3 sm:px-6 flex flex-col min-h-full md:h-full md:min-h-0">
               {canViewDashboard && (
               <div className="flex-none mb-4">

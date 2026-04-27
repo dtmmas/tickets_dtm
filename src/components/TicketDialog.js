@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { DEFAULT_BRAND } from '../branding';
+import { toDateTimeLocalInput } from '../datetime';
+import LocationPickerMap from './LocationPickerMap';
 // Migrado a Tailwind: sin dependencias de MUI
+
+const isValidLatitude = (value) => value !== '' && !Number.isNaN(Number(value)) && Number(value) >= -90 && Number(value) <= 90;
+const isValidLongitude = (value) => value !== '' && !Number.isNaN(Number(value)) && Number(value) >= -180 && Number(value) <= 180;
+const hasCoordinates = (latitud, longitud) => isValidLatitude(latitud) && isValidLongitude(longitud);
+const buildExternalMapUrl = (latitud, longitud) =>
+  `https://www.google.com/maps?q=${encodeURIComponent(`${latitud},${longitud}`)}&t=k`;
 
 // Componente para el diálogo de creación/edición de tickets
 const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, brandPalette = DEFAULT_BRAND }) => {
@@ -13,42 +21,27 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
     descripcion: '',
     tipoSoporte: '',
     estado: 'pendiente',
-    fechaProgramada: ''
+    fechaProgramada: '',
+    latitud: '',
+    longitud: ''
   });
   const [formErrors, setFormErrors] = useState({});
+  const [locationError, setLocationError] = useState('');
+  const [capturingLocation, setCapturingLocation] = useState(false);
+  const [showLocationSection, setShowLocationSection] = useState(false);
   
-  // Normalizar valor para input datetime-local desde fecha existente
-  const toInputDateTime = (val) => {
-    if (!val) return '';
-    try {
-      // Si ya viene en formato compatible (contiene T), intentar usarlo
-      if (typeof val === 'string' && val.includes('T') && val.length >= 16) {
-         // Podría ser ISO, cortar para el input (YYYY-MM-DDThh:mm)
-         return val.substring(0, 16);
-      }
-
-      const d = new Date(val);
-      if (isNaN(d.getTime())) return '';
-      const pad = (n) => String(n).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      const mm = pad(d.getMonth() + 1);
-      const dd = pad(d.getDate());
-      const hh = pad(d.getHours());
-      const mi = pad(d.getMinutes());
-      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-    } catch (_) {
-      return '';
-    }
-  };
-
   // Cargar datos del ticket si se está editando
   useEffect(() => {
     if (ticket) {
+      const ticketHasCoordinates = hasCoordinates(ticket.latitud, ticket.longitud);
       setFormData(prev => ({
         ...prev,
         ...ticket,
-        fechaProgramada: toInputDateTime(ticket.fechaProgramada) // Inicializar ya formateado
+        fechaProgramada: toDateTimeLocalInput(ticket.fechaProgramada),
+        latitud: ticket.latitud ?? '',
+        longitud: ticket.longitud ?? ''
       }));
+      setShowLocationSection(ticketHasCoordinates);
     } else {
       // Resetear formulario si es un nuevo ticket
       setFormData({
@@ -59,9 +52,15 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
         descripcion: '',
         tipoSoporte: '',
         estado: 'pendiente',
-        fechaProgramada: ''
+        fechaProgramada: '',
+        latitud: '',
+        longitud: ''
       });
+      setShowLocationSection(false);
     }
+    setFormErrors({});
+    setLocationError('');
+    setCapturingLocation(false);
   }, [ticket, open]);
   
   // Sanitizar por campo y validar
@@ -82,6 +81,10 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
       }
       case 'telefono': {
         return String(value).replace(/\D/g, '');
+      }
+      case 'latitud':
+      case 'longitud': {
+        return String(value).replace(/[^0-9.-]/g, '');
       }
       default:
         return value;
@@ -108,6 +111,16 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
       case 'descripcion':
         if (!v.trim()) return 'La descripción es obligatoria';
         return '';
+      case 'latitud':
+        if (!v.trim() && !String(formData.longitud || '').trim()) return '';
+        if (!v.trim()) return 'Ingrese también la latitud';
+        if (!isValidLatitude(v)) return 'La latitud debe estar entre -90 y 90';
+        return '';
+      case 'longitud':
+        if (!v.trim() && !String(formData.latitud || '').trim()) return '';
+        if (!v.trim()) return 'Ingrese también la longitud';
+        if (!isValidLongitude(v)) return 'La longitud debe estar entre -180 y 180';
+        return '';
       default:
         return '';
     }
@@ -117,8 +130,19 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
   const handleChange = (e) => {
     const { name, value } = e.target;
     const sanitized = sanitizeValue(name, value);
-    setFormData(prev => ({ ...prev, [name]: sanitized }));
-    setFormErrors(prev => ({ ...prev, [name]: validateField(name, sanitized) }));
+    setFormData(prev => {
+      const next = { ...prev, [name]: sanitized };
+      setFormErrors(errors => ({
+        ...errors,
+        [name]: validateField(name, sanitized),
+        ...(name === 'latitud' ? { longitud: validateField('longitud', next.longitud) } : {}),
+        ...(name === 'longitud' ? { latitud: validateField('latitud', next.latitud) } : {})
+      }));
+      return next;
+    });
+    if (name === 'latitud' || name === 'longitud') {
+      setLocationError('');
+    }
   };
   
   // Validar formulario antes de guardar
@@ -135,10 +159,79 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
       !validateField('telefono', formData.telefono) &&
       !validateField('direccion', formData.direccion) &&
       !validateField('tipoSoporte', formData.tipoSoporte) &&
-      !validateField('descripcion', formData.descripcion)
+      !validateField('descripcion', formData.descripcion) &&
+      !validateField('latitud', formData.latitud) &&
+      !validateField('longitud', formData.longitud)
     );
     const noErrors = Object.values(formErrors).every(v => !v);
     return requiredOk && patternsOk && noErrors;
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Este dispositivo no permite obtener la ubicación actual.');
+      return;
+    }
+
+    setCapturingLocation(true);
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLatitud = position.coords.latitude.toFixed(7);
+        const nextLongitud = position.coords.longitude.toFixed(7);
+        setFormData(prev => ({
+          ...prev,
+          latitud: nextLatitud,
+          longitud: nextLongitud
+        }));
+        setFormErrors(prev => ({
+          ...prev,
+          latitud: '',
+          longitud: ''
+        }));
+        setCapturingLocation(false);
+      },
+      () => {
+        setCapturingLocation(false);
+        setLocationError('No fue posible obtener la ubicación. Verifique permisos de GPS o ingrésela manualmente.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleMapCoordinatesChange = (latitud, longitud) => {
+    setFormData(prev => ({
+      ...prev,
+      latitud,
+      longitud
+    }));
+    setFormErrors(prev => ({
+      ...prev,
+      latitud: '',
+      longitud: ''
+    }));
+    setLocationError('');
+    setShowLocationSection(true);
+  };
+
+  const handleToggleLocationSection = () => {
+    setShowLocationSection((prev) => !prev);
+  };
+
+  const handleClearLocation = () => {
+    setFormData((prev) => ({
+      ...prev,
+      latitud: '',
+      longitud: ''
+    }));
+    setFormErrors((prev) => ({
+      ...prev,
+      latitud: '',
+      longitud: ''
+    }));
+    setLocationError('');
+    setShowLocationSection(false);
   };
   
   // Guardar ticket
@@ -156,12 +249,15 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
       delete payload.precio;
       delete payload.pago;
       delete payload.cobro_aplica;
+      payload.latitud = payload.latitud === '' ? null : Number(payload.latitud);
+      payload.longitud = payload.longitud === '' ? null : Number(payload.longitud);
       // Si fechaProgramada viene del input datetime-local, enviar tal cual
       onSave(payload);
     }
   };
 
   const isResolved = Boolean(ticket && (ticket.estado === 'resuelto' || ticket.estado === 'cancelado'));
+  const showMapPreview = hasCoordinates(formData.latitud, formData.longitud);
 
   return (
     open ? (
@@ -253,6 +349,131 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
                   />
                   {formErrors.direccion && (
                     <p className="text-xs text-red-600 mt-1">{formErrors.direccion}</p>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={handleToggleLocationSection}
+                      disabled={loading || isResolved}
+                      className="inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 disabled:opacity-60"
+                    >
+                      <span
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white"
+                        style={{
+                          backgroundColor: brandPalette.primary,
+                          boxShadow: `0 10px 24px ${brandPalette.softer}`
+                        }}
+                      >
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 21s7-5.686 7-11a7 7 0 10-14 0c0 5.314 7 11 7 11z" />
+                          <circle cx="12" cy="10" r="2.5" strokeWidth="2" />
+                        </svg>
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-700">
+                          {showLocationSection ? 'Ocultar ubicación del cliente' : 'Agregar ubicación del cliente'}
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          Opción opcional. Solo úsela si desea marcar el punto en el mapa.
+                        </span>
+                      </span>
+                    </button>
+                    {showMapPreview && (
+                      <button
+                        type="button"
+                        onClick={handleClearLocation}
+                        disabled={loading || isResolved}
+                        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                      >
+                        Quitar ubicación
+                      </button>
+                    )}
+                  </div>
+
+                  {showLocationSection && (
+                    <div className="mt-4 space-y-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="text-[#5a6c7d] font-medium text-sm">Ubicación del cliente</div>
+                          <p className="text-xs text-slate-500 mt-1">Puede ingresar coordenadas manualmente, capturar la ubicación actual o marcar el punto directamente en el mapa.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleUseCurrentLocation}
+                          disabled={loading || isResolved || capturingLocation}
+                          className="inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                          style={{
+                            backgroundColor: brandPalette.primary,
+                            boxShadow: `0 10px 24px ${brandPalette.softer}`
+                          }}
+                        >
+                          {capturingLocation ? 'Obteniendo GPS...' : 'Usar ubicación actual'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <div className="mb-2 text-[#5a6c7d] font-medium text-sm">Latitud</div>
+                          <input
+                            type="text"
+                            name="latitud"
+                            value={formData.latitud}
+                            onChange={handleChange}
+                            disabled={loading || isResolved}
+                            inputMode="decimal"
+                            placeholder="Ej. 14.6349150"
+                            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+                          />
+                          {formErrors.latitud && (
+                            <p className="text-xs text-red-600 mt-1">{formErrors.latitud}</p>
+                          )}
+                        </div>
+                        <div>
+                          <div className="mb-2 text-[#5a6c7d] font-medium text-sm">Longitud</div>
+                          <input
+                            type="text"
+                            name="longitud"
+                            value={formData.longitud}
+                            onChange={handleChange}
+                            disabled={loading || isResolved}
+                            inputMode="decimal"
+                            placeholder="Ej. -90.5068820"
+                            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+                          />
+                          {formErrors.longitud && (
+                            <p className="text-xs text-red-600 mt-1">{formErrors.longitud}</p>
+                          )}
+                        </div>
+                      </div>
+                      {locationError && (
+                        <p className="text-xs text-red-600">{locationError}</p>
+                      )}
+                      <LocationPickerMap
+                        latitud={formData.latitud}
+                        longitud={formData.longitud}
+                        onChange={handleMapCoordinatesChange}
+                        disabled={loading || isResolved}
+                      />
+                      <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-300 bg-white/80 p-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          {showMapPreview
+                            ? `Punto seleccionado: ${formData.latitud}, ${formData.longitud}`
+                            : 'Puede marcar el punto directamente en el mapa o escribir las coordenadas manualmente.'}
+                        </span>
+                        {showMapPreview && (
+                          <a
+                            href={buildExternalMapUrl(formData.latitud, formData.longitud)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold"
+                            style={{ color: brandPalette.deep }}
+                          >
+                            Abrir en Google Maps
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div>
