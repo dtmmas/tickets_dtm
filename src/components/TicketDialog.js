@@ -4,27 +4,30 @@ import { toDateTimeLocalInput } from '../datetime';
 import LocationPickerMap from './LocationPickerMap';
 // Migrado a Tailwind: sin dependencias de MUI
 
-const isValidLatitude = (value) => value !== '' && !Number.isNaN(Number(value)) && Number(value) >= -90 && Number(value) <= 90;
-const isValidLongitude = (value) => value !== '' && !Number.isNaN(Number(value)) && Number(value) >= -180 && Number(value) <= 180;
+const isProvidedCoordinate = (value) => value !== '' && value !== null && value !== undefined;
+const isValidLatitude = (value) => isProvidedCoordinate(value) && !Number.isNaN(Number(value)) && Number(value) >= -90 && Number(value) <= 90;
+const isValidLongitude = (value) => isProvidedCoordinate(value) && !Number.isNaN(Number(value)) && Number(value) >= -180 && Number(value) <= 180;
 const hasCoordinates = (latitud, longitud) => isValidLatitude(latitud) && isValidLongitude(longitud);
 const buildExternalMapUrl = (latitud, longitud) =>
   `https://www.google.com/maps?q=${encodeURIComponent(`${latitud},${longitud}`)}&t=k`;
+const toCoordinateInputValue = (value) => (value === null || value === undefined ? '' : String(value));
+const createEmptyFormData = () => ({
+  id: null,
+  cliente: '',
+  direccion: '',
+  telefono: '',
+  descripcion: '',
+  tipoSoporte: '',
+  estado: 'pendiente',
+  fechaProgramada: '',
+  latitud: '',
+  longitud: ''
+});
 
 // Componente para el diálogo de creación/edición de tickets
 const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, brandPalette = DEFAULT_BRAND }) => {
   // Estado para los datos del formulario
-  const [formData, setFormData] = useState({
-    id: null,
-    cliente: '',
-    direccion: '',
-    telefono: '',
-    descripcion: '',
-    tipoSoporte: '',
-    estado: 'pendiente',
-    fechaProgramada: '',
-    latitud: '',
-    longitud: ''
-  });
+  const [formData, setFormData] = useState(createEmptyFormData);
   const [formErrors, setFormErrors] = useState({});
   const [locationError, setLocationError] = useState('');
   const [capturingLocation, setCapturingLocation] = useState(false);
@@ -34,28 +37,17 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
   useEffect(() => {
     if (ticket) {
       const ticketHasCoordinates = hasCoordinates(ticket.latitud, ticket.longitud);
-      setFormData(prev => ({
-        ...prev,
+      setFormData({
+        ...createEmptyFormData(),
         ...ticket,
         fechaProgramada: toDateTimeLocalInput(ticket.fechaProgramada),
-        latitud: ticket.latitud ?? '',
-        longitud: ticket.longitud ?? ''
-      }));
+        latitud: toCoordinateInputValue(ticket.latitud),
+        longitud: toCoordinateInputValue(ticket.longitud)
+      });
       setShowLocationSection(ticketHasCoordinates);
     } else {
       // Resetear formulario si es un nuevo ticket
-      setFormData({
-        id: null,
-        cliente: '',
-        direccion: '',
-        telefono: '',
-        descripcion: '',
-        tipoSoporte: '',
-        estado: 'pendiente',
-        fechaProgramada: '',
-        latitud: '',
-        longitud: ''
-      });
+      setFormData(createEmptyFormData());
       setShowLocationSection(false);
     }
     setFormErrors({});
@@ -92,7 +84,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
   };
 
   const validateField = (name, value) => {
-    const v = value || '';
+    const v = typeof value === 'string' ? value : String(value ?? '');
     switch (name) {
       case 'cliente':
         if (!v.trim()) return 'El nombre es obligatorio';
@@ -258,6 +250,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
 
   const isResolved = Boolean(ticket && (ticket.estado === 'resuelto' || ticket.estado === 'cancelado'));
   const showMapPreview = hasCoordinates(formData.latitud, formData.longitud);
+  const mapInstanceKey = `${ticket?.id || 'new'}-${open ? 'open' : 'closed'}-${showLocationSection ? 'location' : 'hidden'}`;
 
   return (
     open ? (
@@ -450,6 +443,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
                         <p className="text-xs text-red-600">{locationError}</p>
                       )}
                       <LocationPickerMap
+                        mapKey={mapInstanceKey}
                         latitud={formData.latitud}
                         longitud={formData.longitud}
                         onChange={handleMapCoordinatesChange}

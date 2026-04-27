@@ -41,7 +41,7 @@ const ClickSelector = ({ disabled, onPick }) => {
   return null;
 };
 
-const LocationPickerMap = ({ latitud, longitud, onChange, disabled = false }) => {
+const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, disabled = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -151,6 +151,7 @@ const LocationPickerMap = ({ latitud, longitud, onChange, disabled = false }) =>
         )}
       </div>
       <MapContainer
+        key={mapKey}
         center={center}
         zoom={position ? 18 : 6}
         scrollWheelZoom
