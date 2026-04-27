@@ -245,7 +245,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col md:h-full">
       <div className="flex-none mb-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -282,7 +282,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
           </span>
         </div>
       )}
-      <div className="flex-1 overflow-auto border border-slate-200 rounded-2xl relative bg-white shadow-sm">
+      <div className="border border-slate-200 rounded-2xl relative bg-white shadow-sm overflow-visible md:flex-1 md:overflow-auto">
         {/* Vista móvil (Tarjetas) */}
         <div className="block md:hidden">
           {tickets.length === 0 ? (

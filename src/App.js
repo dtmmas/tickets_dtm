@@ -526,8 +526,8 @@ function App() {
             </div>
           </header>
           
-          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="w-full mx-auto mt-4 mb-4 px-3 sm:px-6 flex flex-col h-full min-h-0">
+          <main className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden">
+            <div className="w-full mx-auto mt-4 mb-4 px-3 sm:px-6 flex flex-col min-h-full md:h-full md:min-h-0">
               {canViewDashboard && (
               <div className="flex-none mb-4">
                 <Dashboard 
@@ -539,7 +539,7 @@ function App() {
               </div>
               )}
               
-              <div className="flex-1 flex flex-col min-h-0 bg-white rounded-lg shadow overflow-hidden relative">
+              <div className="flex flex-col bg-white rounded-lg shadow relative overflow-visible md:flex-1 md:min-h-0 md:overflow-hidden">
                 {loading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
                     <div className="h-6 w-6 rounded-full border-4 border-gray-300 border-t-transparent animate-spin" />
@@ -638,13 +638,13 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden relative">
+                <div className="relative overflow-visible md:flex-1 md:overflow-hidden">
                   {!canViewTickets ? (
-                    <div className="h-full flex items-center justify-center p-6 text-center text-gray-500">
+                    <div className="min-h-[240px] md:h-full flex items-center justify-center p-6 text-center text-gray-500">
                       No tienes permisos para ver tickets con este rol.
                     </div>
                   ) : viewMode === 'lista' ? (
-                    <div className="absolute inset-0 overflow-hidden">
+                    <div className="relative md:absolute md:inset-0 overflow-visible md:overflow-hidden">
                       <TicketList 
                         tickets={filteredTickets} 
                         estados={estadosTicket}
@@ -662,7 +662,7 @@ function App() {
                       />
                     </div>
                   ) : (
-                    <div className="h-full overflow-auto p-4">
+                    <div className="min-h-[320px] md:h-full overflow-visible md:overflow-auto p-4">
                       <CalendarAgenda 
                         tickets={filteredTickets}
                         onSelectTicket={handleEditTicket}
