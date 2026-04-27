@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { DEFAULT_BRAND } from '../branding';
 // Migrado a Tailwind: sin dependencias de MUI
 
 // Componente para el diálogo de creación/edición de tickets
-const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) => {
+const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, brandPalette = DEFAULT_BRAND }) => {
   // Estado para los datos del formulario
   const [formData, setFormData] = useState({
     id: null,
@@ -73,7 +74,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
       }
       case 'direccion': {
         const upper = value.toUpperCase();
-        return upper.replace(/[^A-ZÁÉÍÓÚÑÜ0-9#\-\/\s]/g, '');
+        return upper.replace(/[^A-ZÁÉÍÓÚÑÜ0-9#\-/\s]/g, '');
       }
       case 'descripcion': {
         const upper = value.toUpperCase();
@@ -166,16 +167,33 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
     open ? (
       <div className="fixed inset-0 z-50">
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-        <div className="relative z-10 flex items-center justify-center h-full px-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg overflow-visible">
-            <div className="pb-1 pt-4 px-6 text-left">
-              <div className="text-[1.5rem] font-semibold text-[#2c3e50]">
-                {ticket ? 'Editar Ticket' : 'Nuevo Ticket'}
+        <div className="relative z-10 flex h-full items-start justify-center overflow-y-auto px-3 py-3 sm:items-center sm:px-4 sm:py-6">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl border border-slate-200 overflow-hidden max-h-[calc(100vh-1.5rem)] flex flex-col sm:max-h-[calc(100vh-3rem)]">
+            <div
+              className="h-1.5 w-full rounded-t-2xl"
+              style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+            />
+            <div className="pb-1 pt-4 px-4 sm:px-6 text-left flex items-start justify-between gap-4 flex-none">
+              <div>
+                <div
+                  className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+                  style={{ backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+                >
+                  {ticket ? 'Edicion' : 'Creacion'}
+                </div>
+                <div className="text-[1.5rem] font-semibold text-[#2c3e50]">
+                  {ticket ? 'Editar Ticket' : 'Nuevo Ticket'}
+                </div>
+                <div className="text-sm text-slate-500 mt-1">
+                  {ticket ? 'Actualiza la informacion del servicio con la misma identidad visual del sistema.' : 'Registra un nuevo requerimiento con la imagen corporativa activa.'}
+                </div>
               </div>
-              {/* Campos de cobro/pago removidos */}
+              <button onClick={onClose} className="text-gray-600 hover:text-gray-800">
+                ✕
+              </button>
             </div>
-            <div className="px-6 pt-4 pb-4 min-h-[500px]">
-              <div className="max-w-[500px] mx-auto space-y-6">
+            <div className="px-4 sm:px-6 pt-4 pb-4 overflow-y-auto min-h-0 flex-1">
+              <div className="max-w-[500px] mx-auto space-y-5 sm:space-y-6">
                 <div>
                   <div className="mb-2 text-[#5a6c7d] font-medium text-sm">Nombre</div>
                   <input
@@ -186,7 +204,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     required
                     disabled={loading || isResolved}
                     placeholder="Ingrese el nombre del cliente"
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 placeholder-gray-400 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   {formErrors.cliente && (
                     <p className="text-xs text-red-600 mt-1">{formErrors.cliente}</p>
@@ -200,7 +218,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     value={formData.fechaProgramada || ''}
                     onChange={handleChange}
                     disabled={loading || isResolved}
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 placeholder-gray-400 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
                   />
                   <p className="text-xs text-gray-500 mt-1">Opcional. Agenda la fecha en que se resolverá/realizará el ticket.</p>
                 </div>
@@ -215,7 +233,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     required
                     placeholder="Ingrese el número de teléfono"
                     disabled={loading || isResolved}
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 placeholder-gray-400 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
                   />
                   {formErrors.telefono && (
                     <p className="text-xs text-red-600 mt-1">{formErrors.telefono}</p>
@@ -231,7 +249,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     required
                     disabled={loading || isResolved}
                     placeholder="Ingrese la dirección"
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 placeholder-gray-400 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
                   />
                   {formErrors.direccion && (
                     <p className="text-xs text-red-600 mt-1">{formErrors.direccion}</p>
@@ -245,7 +263,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     onChange={handleChange}
                     required
                     disabled={loading || isResolved}
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 text-gray-700 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 text-gray-700 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
                   >
                     <option value="" className="text-gray-400">Seleccione el tipo de soporte</option>
                     {tiposSoporte.map((tipo) => (
@@ -266,7 +284,7 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                     required
                     disabled={loading || isResolved}
                     placeholder="Describa el problema detalladamente"
-                    className="w-full rounded-md bg-gray-100 border border-gray-200 px-3 py-3 placeholder-gray-400 hover:bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y disabled:opacity-60"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 placeholder-gray-400 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 resize-y disabled:opacity-60"
                   />
                   {formErrors.descripcion && (
                     <p className="text-xs text-red-600 mt-1">{formErrors.descripcion}</p>
@@ -274,15 +292,20 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                 </div>
               </div>
             </div>
-            <div className="px-4 pb-4 pt-3 flex gap-2 justify-end">
+            <div className="px-4 pb-4 pt-3 flex flex-col gap-2 sm:flex-row sm:justify-end sm:items-center border-t border-slate-100 flex-none">
               {isResolved && (
-                <div className="px-6 -mt-2 text-sm text-amber-700">Este ticket está resuelto. No se puede editar.</div>
+                <div
+                  className="sm:mr-auto rounded-full px-3 py-1 text-xs font-semibold text-center"
+                  style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}
+                >
+                  Este ticket esta resuelto. No se puede editar.
+                </div>
               )}
               <button 
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="rounded-md font-semibold px-4 py-2 text-gray-700 border border-gray-300 bg-gray-100 hover:bg-gray-200 hover:border-gray-400 disabled:opacity-60"
+                className="w-full sm:w-auto rounded-xl font-semibold px-4 py-2 text-gray-700 border border-gray-300 bg-gray-100 hover:bg-gray-200 hover:border-gray-400 disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -290,7 +313,11 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading }) 
                 type="button"
                 onClick={handleSave}
                 disabled={!isFormValid() || loading || isResolved}
-                className="rounded-md font-semibold px-4 py-2 text-white bg-[#00bcd4] hover:bg-[#0097a7] disabled:bg-gray-400"
+                className="w-full sm:w-auto rounded-xl font-semibold px-4 py-2 text-white disabled:bg-gray-400"
+                style={{
+                  backgroundColor: !isFormValid() || loading || isResolved ? undefined : brandPalette.primary,
+                  boxShadow: !isFormValid() || loading || isResolved ? undefined : `0 12px 28px ${brandPalette.softer}`
+                }}
               >
                 {loading ? 'Guardando...' : (ticket ? (isResolved ? 'No editable' : 'Actualizar Ticket') : 'Agregar Ticket')}
               </button>

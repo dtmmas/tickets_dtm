@@ -8,7 +8,7 @@ import SettingsManager from './components/SettingsManager';
 import UsersManager from './components/UsersManager';
 import CalendarAgenda from './components/CalendarAgenda';
 import { hasPermission } from './permissions';
-import { applyFavicon } from './branding';
+import { applyFavicon, DEFAULT_BRAND, extractBrandFromImage } from './branding';
 
 // API URL
 // En producción, usamos path relativo para que funcione con cualquier IP/dominio
@@ -42,6 +42,12 @@ function App() {
   const [showTipos, setShowTipos] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUsersManager, setShowUsersManager] = useState(false);
+  const [publicBranding, setPublicBranding] = useState({
+    empresaNombre: 'Sistema de Tickets',
+    loginSubtitle: '',
+    logoUrl: ''
+  });
+  const [brandPalette, setBrandPalette] = useState(DEFAULT_BRAND);
   const canViewDashboard = hasPermission(user, 'dashboard.view');
   const canViewTickets = hasPermission(user, 'tickets.view');
   const canCreateTickets = hasPermission(user, 'tickets.create');
@@ -125,6 +131,11 @@ function App() {
         if (!response.ok) return;
         const data = await response.json();
         applyFavicon(data.faviconUrl || '');
+        setPublicBranding({
+          empresaNombre: data.empresaNombre || 'Sistema de Tickets',
+          loginSubtitle: data.loginSubtitle || '',
+          logoUrl: data.logoUrl || ''
+        });
       } catch (_) {
         // Ignorar errores de branding
       }
@@ -132,6 +143,24 @@ function App() {
 
     fetchPublicConfig();
   }, []);
+
+  useEffect(() => {
+    if (!publicBranding.logoUrl) {
+      setBrandPalette(DEFAULT_BRAND);
+      return;
+    }
+
+    let cancelled = false;
+    extractBrandFromImage(publicBranding.logoUrl).then((palette) => {
+      if (!cancelled) {
+        setBrandPalette(palette);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publicBranding.logoUrl]);
 
   // Función de login
   const handleLogin = async (credentials) => {
@@ -426,34 +455,86 @@ function App() {
         <Login onLogin={handleLogin} loading={loading} error={error} apiUrl={API_URL} />
       ) : (
         <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-          <header className="bg-white border-b border-gray-200 flex-none z-10">
-            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center">
-              <div className="font-semibold text-lg text-gray-800 flex-1">Sistema de Tickets de Soporte DTM Jacaltenango</div>
-              <div className="text-sm text-gray-600 mr-4">Bienvenido, {user?.nombre || user?.user?.nombre}</div>
+          <header className="flex-none z-10 border-b border-slate-200/80 bg-white shadow-sm">
+            <div
+              className="h-1 w-full"
+              style={{
+                background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})`
+              }}
+            />
+            <div className="w-full mx-auto px-4 py-3 md:px-6">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  {publicBranding.logoUrl ? (
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm">
+                      <img src={publicBranding.logoUrl} alt="Logo" className="max-h-10 max-w-10 object-contain" />
+                    </div>
+                  ) : (
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-semibold shadow-sm"
+                      style={{ backgroundColor: brandPalette.primary, color: brandPalette.textOnPrimary }}
+                    >
+                      TS
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-lg font-semibold tracking-tight text-slate-900">
+                      {publicBranding.empresaNombre || 'Sistema de Tickets'}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                        style={{
+                          backgroundColor: brandPalette.soft,
+                          color: brandPalette.deep
+                        }}
+                      >
+                        Plataforma activa
+                      </span>
+                      <span className="truncate">
+                        {publicBranding.loginSubtitle || 'Gestión centralizada de tickets'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    Bienvenido, <span className="font-semibold text-slate-800">{user?.nombre || user?.user?.nombre}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
               {canManageSupportTypes && (
-                <button onClick={() => setShowTipos(true)} className="text-sm px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white mr-3">
+                <button
+                  onClick={() => setShowTipos(true)}
+                  className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl text-white transition"
+                  style={{ backgroundColor: brandPalette.primary, boxShadow: `0 10px 24px ${brandPalette.softer}` }}
+                >
                   Tipos de Soporte
                 </button>
               )}
               {canManageSettings && (
-                <button onClick={() => setShowSettings(true)} className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white mr-3">
+                <button onClick={() => setShowSettings(true)} className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition">
                   Configuración
                 </button>
               )}
-              <button onClick={handleLogout} className="text-sm px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300">
+              <button onClick={handleLogout} className="w-full sm:w-auto text-sm px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition">
                 Cerrar Sesión
               </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </header>
           
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="w-full mx-auto mt-4 mb-4 px-6 flex flex-col h-full min-h-0">
+            <div className="w-full mx-auto mt-4 mb-4 px-3 sm:px-6 flex flex-col h-full min-h-0">
               {canViewDashboard && (
               <div className="flex-none mb-4">
                 <Dashboard 
                   estadisticas={estadisticas} 
                   onAddTicket={handleAddTicket} 
                   canCreateTicket={canCreateTickets}
+                  brandPalette={brandPalette}
                 />
               </div>
               )}
@@ -478,7 +559,7 @@ function App() {
                         className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                       />
                     </div>
-                    <div className="flex gap-3 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                       <div className="flex-1 md:flex-none">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
                         <select
@@ -524,7 +605,15 @@ function App() {
                           type="button"
                           onClick={() => setViewMode('lista')}
                           disabled={!canViewTickets}
-                          className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='lista' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                          className={`flex-1 md:flex-none rounded-xl border px-3 py-2 text-sm transition ${viewMode === 'lista' ? '' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                          style={viewMode === 'lista'
+                            ? {
+                                backgroundColor: brandPalette.primary,
+                                color: brandPalette.textOnPrimary,
+                                borderColor: brandPalette.deep,
+                                boxShadow: `0 10px 24px ${brandPalette.softer}`
+                              }
+                            : undefined}
                         >
                           Lista
                         </button>
@@ -532,7 +621,15 @@ function App() {
                           type="button"
                           onClick={() => setViewMode('calendario')}
                           disabled={!canViewCalendar}
-                          className={`flex-1 md:flex-none rounded-md border px-3 py-2 text-sm ${viewMode==='calendario' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                          className={`flex-1 md:flex-none rounded-xl border px-3 py-2 text-sm transition ${viewMode === 'calendario' ? '' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                          style={viewMode === 'calendario'
+                            ? {
+                                backgroundColor: brandPalette.primary,
+                                color: brandPalette.textOnPrimary,
+                                borderColor: brandPalette.deep,
+                                boxShadow: `0 10px 24px ${brandPalette.softer}`
+                              }
+                            : undefined}
                         >
                           Calendario
                         </button>
@@ -555,6 +652,7 @@ function App() {
                         onUpdateStatus={handleUpdateStatus}
                         onDeleteTicket={handleDeleteTicket}
                         apiUrl={API_URL}
+                        brandPalette={brandPalette}
                         permissions={{
                           canEditTickets,
                           canChangeTicketStatus,
@@ -583,16 +681,21 @@ function App() {
             onClose={() => setOpenDialog(false)}
             onSave={handleSaveTicket}
             loading={loading}
+            brandPalette={brandPalette}
           />
 
           {showTipos && canManageSupportTypes && (
-            <TiposSoporteManager apiUrl={API_URL} onClose={() => setShowTipos(false)} />
+            <TiposSoporteManager apiUrl={API_URL} onClose={() => setShowTipos(false)} brandPalette={brandPalette} />
           )}
               {isAuthenticated && canOpenUsersManager && (
-                <div className="fixed bottom-6 right-6 z-40">
+                <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40">
                   <button
                     onClick={() => setShowUsersManager(true)}
-                    className="rounded-full shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                    className="rounded-full shadow-lg text-white px-3 py-2 sm:px-4 text-xs sm:text-sm transition"
+                    style={{
+                      backgroundColor: brandPalette.primary,
+                      boxShadow: `0 16px 36px ${brandPalette.softer}`
+                    }}
                     title="Gestionar usuarios"
                   >
                     Usuarios
@@ -600,10 +703,10 @@ function App() {
                 </div>
               )}
               {showSettings && (
-                <SettingsManager apiUrl={API_URL} onClose={() => setShowSettings(false)} />
+                <SettingsManager apiUrl={API_URL} onClose={() => setShowSettings(false)} brandPalette={brandPalette} />
               )}
               {showUsersManager && (
-                <UsersManager apiUrl={API_URL} onClose={() => setShowUsersManager(false)} currentUser={user} />
+                <UsersManager apiUrl={API_URL} onClose={() => setShowUsersManager(false)} currentUser={user} brandPalette={brandPalette} />
               )}
           
           {error && (

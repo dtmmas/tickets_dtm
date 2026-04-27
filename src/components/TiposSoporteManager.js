@@ -1,6 +1,7 @@
 import React from 'react';
+import { DEFAULT_BRAND } from '../branding';
 
-const TiposSoporteManager = ({ apiUrl, onClose }) => {
+const TiposSoporteManager = ({ apiUrl, onClose, brandPalette = DEFAULT_BRAND }) => {
   const toUpperValue = (value) => String(value || '').toUpperCase();
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -107,17 +108,26 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 flex items-center justify-center h-full px-4">
         <div role="dialog" aria-modal="true" className="bg-white/90 backdrop-blur rounded-none sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-screen-sm md:max-w-2xl lg:max-w-3xl h-full sm:h-auto max-h-[100vh] sm:max-h-[85vh] overflow-y-auto transition-all duration-200 ease-out">
+          <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }} />
           <div className="px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur border-b border-gray-200">
-            <div className="text-lg md:text-xl font-semibold text-slate-800">Tipos de Soporte</div>
+            <div>
+              <div
+                className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+                style={{ backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+              >
+                Catálogo
+              </div>
+              <div className="text-lg md:text-xl font-semibold text-slate-800">Tipos de Soporte</div>
+            </div>
             <button onClick={onClose} aria-label="Cerrar" className="rounded-md p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition">✕</button>
           </div>
           <div className="px-6 pb-4">
             <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-3">
               <div className="w-full sm:w-auto">
                 <label className="sr-only">Buscar</label>
-                <input value={search} onChange={(e)=>setSearch(toUpperValue(e.target.value))} placeholder="Buscar por nombre o descripción" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" />
+                <input value={search} onChange={(e)=>setSearch(toUpperValue(e.target.value))} placeholder="Buscar por nombre o descripción" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none" />
               </div>
-              <button onClick={()=>fetchItems({ page: 1, search })} className="w-full sm:w-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 text-sm transition">Buscar</button>
+              <button onClick={()=>fetchItems({ page: 1, search })} className="w-full sm:w-auto rounded-lg text-white px-3 py-2 text-sm transition" style={{ backgroundColor: brandPalette.primary }}>Buscar</button>
             </div>
             {error && <div className="bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded-lg mb-3 text-sm">{error}</div>}
             <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6">
@@ -134,7 +144,7 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
                       <div className="text-slate-600 text-sm mb-2 break-words">{it.descripcion || '-'}</div>
                       <div className="text-xs text-slate-600 mb-3">Activo: {it.activo ? 'Sí' : 'No'}</div>
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={()=>handleEdit(it)} className="flex-1 sm:flex-none px-3 py-1.5 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs">Editar</button>
+                        <button onClick={()=>handleEdit(it)} className="flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs" style={{ border: `1px solid ${brandPalette.softer}`, color: brandPalette.deep, backgroundColor: brandPalette.soft }}>Editar</button>
                         <button onClick={()=>handleDelete(it)} className="flex-1 sm:flex-none px-3 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 text-xs">Eliminar</button>
                       </div>
                     </div>
@@ -158,7 +168,7 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
                           <td className="p-2 text-slate-600 break-words">{it.descripcion || '-'}</td>
                           <td className="p-2">{it.activo ? 'Sí' : 'No'}</td>
                           <td className="p-2 flex flex-wrap gap-2">
-                            <button onClick={()=>handleEdit(it)} className="px-3 py-1.5 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs sm:text-sm">Editar</button>
+                            <button onClick={()=>handleEdit(it)} className="px-3 py-1.5 rounded-md text-xs sm:text-sm" style={{ border: `1px solid ${brandPalette.softer}`, color: brandPalette.deep, backgroundColor: brandPalette.soft }}>Editar</button>
                             <button onClick={()=>handleDelete(it)} className="px-3 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 text-xs sm:text-sm">Eliminar</button>
                           </td>
                         </tr>
@@ -187,11 +197,11 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Nombre</label>
-                    <input value={form.nombre} onChange={(e)=>setForm({...form, nombre: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" required />
+                    <input value={form.nombre} onChange={(e)=>setForm({...form, nombre: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none" required />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Descripción</label>
-                    <textarea value={form.descripcion} onChange={(e)=>setForm({...form, descripcion: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" rows={3} />
+                    <textarea value={form.descripcion} onChange={(e)=>setForm({...form, descripcion: toUpperValue(e.target.value)})} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm uppercase focus:outline-none" rows={3} />
                   </div>
                   <div className="flex items-center gap-2">
                     <input id="activo" type="checkbox" checked={form.activo} onChange={(e)=>setForm({...form, activo: e.target.checked})} />
@@ -199,7 +209,7 @@ const TiposSoporteManager = ({ apiUrl, onClose }) => {
                   </div>
                   {formError && <p className="text-xs text-red-600">{formError}</p>}
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <button type="submit" className="w-full sm:w-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 text-sm transition">{editing ? 'Guardar Cambios' : 'Crear Tipo'}</button>
+                    <button type="submit" className="w-full sm:w-auto rounded-lg text-white px-3 py-2 text-sm transition" style={{ backgroundColor: brandPalette.primary }}>{editing ? 'Guardar Cambios' : 'Crear Tipo'}</button>
                     {editing && <button type="button" onClick={resetForm} className="w-full sm:w-auto rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-slate-50">Cancelar</button>}
                   </div>
                 </form>

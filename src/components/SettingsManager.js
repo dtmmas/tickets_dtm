@@ -1,7 +1,7 @@
 import React from 'react';
-import { applyFavicon } from '../branding';
+import { applyFavicon, DEFAULT_BRAND } from '../branding';
 
-const SettingsManager = ({ apiUrl, onClose }) => {
+const SettingsManager = ({ apiUrl, onClose, brandPalette = DEFAULT_BRAND }) => {
   const toUpperValue = (value) => String(value || '').toUpperCase();
   const [empresaNombre, setEmpresaNombre] = React.useState('');
   const [loginSubtitle, setLoginSubtitle] = React.useState('');
@@ -147,9 +147,21 @@ const SettingsManager = ({ apiUrl, onClose }) => {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 flex items-center justify-center h-full px-4">
-        <div className="bg-white rounded-lg shadow-lg w-full max-w-screen-sm md:max-w-2xl overflow-visible">
+        <div className="bg-white rounded-2xl shadow-lg w-full max-w-screen-sm md:max-w-2xl overflow-visible border border-slate-200">
+          <div
+            className="h-1.5 w-full rounded-t-2xl"
+            style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+          />
           <div className="pb-1 pt-4 px-4 md:px-6 text-left flex items-center justify-between">
-            <div className="text-[1.5rem] font-semibold text-[#2c3e50]">Configuración</div>
+            <div>
+              <div
+                className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+                style={{ backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+              >
+                Branding
+              </div>
+              <div className="text-[1.5rem] font-semibold text-[#2c3e50]">Configuración</div>
+            </div>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-800">✕</button>
           </div>
           <div className="px-4 md:px-6 pt-4 pb-4">
@@ -192,7 +204,14 @@ const SettingsManager = ({ apiUrl, onClose }) => {
                     <input value={loginSubtitle} onChange={(e)=>{ setLoginSubtitle(toUpperValue(e.target.value)); setSuccess(''); }} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
                   </div>
                   <div className="flex gap-2">
-                    <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">Guardar</button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="rounded-md text-white px-3 py-1.5 text-sm"
+                      style={{ backgroundColor: brandPalette.primary, boxShadow: `0 10px 24px ${brandPalette.softer}` }}
+                    >
+                      Guardar
+                    </button>
                     <button type="button" onClick={fetchConfig} disabled={loading} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Recargar</button>
                   </div>
                 </form>
@@ -204,7 +223,7 @@ const SettingsManager = ({ apiUrl, onClose }) => {
       {showConfirmSave && (
         <div className="absolute inset-0 z-20 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => !loading && setShowConfirmSave(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-5 border border-slate-200">
             <div className="text-lg font-semibold text-gray-800 mb-2">Confirmar cambios</div>
             <p className="text-sm text-gray-600 mb-4">
               Se guardarán los cambios de configuración, incluyendo textos, logo e icono de la pestaña.
@@ -222,7 +241,8 @@ const SettingsManager = ({ apiUrl, onClose }) => {
                 type="button"
                 onClick={performSave}
                 disabled={loading}
-                className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm"
+                className="rounded-md text-white px-3 py-1.5 text-sm"
+                style={{ backgroundColor: brandPalette.primary }}
               >
                 {loading ? 'Guardando...' : 'Sí, guardar'}
               </button>

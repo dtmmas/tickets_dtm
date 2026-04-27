@@ -1,7 +1,8 @@
 import React from 'react';
 import { PERMISSION_GROUPS, hasPermission } from '../permissions';
+import { DEFAULT_BRAND } from '../branding';
 
-const UsersManager = ({ apiUrl, onClose, currentUser }) => {
+const UsersManager = ({ apiUrl, onClose, currentUser, brandPalette = DEFAULT_BRAND }) => {
   const toUpperValue = (value) => String(value || '').toUpperCase();
   const token = localStorage.getItem('token');
   const canManageUsers = hasPermission(currentUser, 'users.manage');
@@ -255,9 +256,21 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 flex items-center justify-center h-full px-2 md:px-4">
-        <div className="bg-white rounded-lg shadow-lg w-full max-w-7xl max-h-[95vh] overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-lg w-full max-w-7xl max-h-[95vh] overflow-hidden border border-slate-200">
+          <div
+            className="h-1.5 w-full"
+            style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+          />
           <div className="pb-1 pt-4 px-4 md:px-6 text-left flex items-center justify-between border-b">
-            <div className="text-[1.5rem] font-semibold text-[#2c3e50]">Gestión de Usuarios y Roles</div>
+            <div>
+              <div
+                className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+                style={{ backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+              >
+                Administración
+              </div>
+              <div className="text-[1.5rem] font-semibold text-[#2c3e50]">Gestión de Usuarios y Roles</div>
+            </div>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-800">✕</button>
           </div>
 
@@ -269,7 +282,10 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                 <button
                   type="button"
                   onClick={() => setActiveTab('users')}
-                  className={`rounded-md px-4 py-2 text-sm border ${activeTab === 'users' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                  className={`rounded-md px-4 py-2 text-sm border ${activeTab === 'users' ? 'text-white' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                  style={activeTab === 'users'
+                    ? { backgroundColor: brandPalette.primary, borderColor: brandPalette.deep, boxShadow: `0 10px 24px ${brandPalette.softer}` }
+                    : undefined}
                 >
                   Usuarios
                 </button>
@@ -278,7 +294,10 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                 <button
                   type="button"
                   onClick={() => setActiveTab('roles')}
-                  className={`rounded-md px-4 py-2 text-sm border ${activeTab === 'roles' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                  className={`rounded-md px-4 py-2 text-sm border ${activeTab === 'roles' ? 'text-white' : 'bg-gray-100 text-gray-700 border-gray-300'}`}
+                  style={activeTab === 'roles'
+                    ? { backgroundColor: brandPalette.primary, borderColor: brandPalette.deep, boxShadow: `0 10px 24px ${brandPalette.softer}` }
+                    : undefined}
                 >
                   Roles y accesos
                 </button>
@@ -309,7 +328,7 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                       Incluir inactivos
                     </label>
                   </div>
-                  <button onClick={fetchUsers} className="rounded-md border border-gray-300 bg-gray-100 text-gray-700 px-3 py-2 text-sm hover:bg-gray-200">
+                  <button onClick={fetchUsers} className="rounded-md text-white px-3 py-2 text-sm" style={{ backgroundColor: brandPalette.primary }}>
                     Buscar
                   </button>
                 </div>
@@ -387,7 +406,12 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                         </label>
                       </div>
                       <div className="flex gap-2">
-                        <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="rounded-md text-white px-3 py-1.5 text-sm"
+                          style={{ backgroundColor: brandPalette.primary }}
+                        >
                           {editing ? 'Guardar cambios' : 'Crear'}
                         </button>
                         <button type="button" onClick={resetUserForm} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
@@ -462,7 +486,7 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                       Incluir roles inactivos
                     </label>
                   </div>
-                  <button onClick={fetchRoles} className="rounded-md border border-gray-300 bg-gray-100 text-gray-700 px-3 py-2 text-sm hover:bg-gray-200">
+                  <button onClick={fetchRoles} className="rounded-md text-white px-3 py-2 text-sm" style={{ backgroundColor: brandPalette.primary }}>
                     Recargar roles
                   </button>
                 </div>
@@ -500,7 +524,12 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                         </label>
                       </div>
                       <div className="flex gap-2">
-                        <button type="submit" disabled={loading} className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm">
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="rounded-md text-white px-3 py-1.5 text-sm"
+                          style={{ backgroundColor: brandPalette.primary }}
+                        >
                           {editingRole ? 'Guardar rol' : 'Crear rol'}
                         </button>
                         <button type="button" onClick={resetRoleForm} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
@@ -588,7 +617,7 @@ const UsersManager = ({ apiUrl, onClose, currentUser }) => {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
-                  <button onClick={applyChangePwd} className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm">
+                  <button onClick={applyChangePwd} className="rounded-md text-white px-3 py-1.5 text-sm" style={{ backgroundColor: brandPalette.primary }}>
                     Actualizar
                   </button>
                   <button onClick={() => { setPwdUserId(null); setNewPassword(''); }} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">

@@ -1,8 +1,9 @@
 import React from 'react';
 import { computeDiff } from './auditUtils';
+import { DEFAULT_BRAND } from '../branding';
 
 // Componente para mostrar la lista de tickets
-const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTicket, apiUrl, permissions = {} }) => {
+const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTicket, apiUrl, permissions = {}, brandPalette = DEFAULT_BRAND }) => {
   const toUpperValue = (value) => String(value || '').toUpperCase();
   const {
     canEditTickets = true,
@@ -126,6 +127,18 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
     return String(value);
   };
 
+  const primaryButtonStyle = {
+    backgroundColor: brandPalette.primary,
+    borderColor: brandPalette.deep,
+    color: brandPalette.textOnPrimary,
+    boxShadow: `0 10px 24px ${brandPalette.softer}`
+  };
+
+  const softBadgeStyle = {
+    backgroundColor: brandPalette.soft,
+    color: brandPalette.deep
+  };
+
   const openConfirm = (message, onConfirm, variant = 'warning', context = null, type = null) => {
     setConfirmState({ open: true, message, onConfirm, variant, context, type });
     if (type === 'status' && context?.to === 'cancelado') {
@@ -233,11 +246,33 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-none mb-3">
-        <h2 className="text-xl font-semibold text-gray-800">Listado de Tickets</h2>
+      <div className="flex-none mb-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div
+              className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+              style={softBadgeStyle}
+            >
+              Operacion diaria
+            </div>
+            <h2 className="text-xl font-semibold text-gray-800">Listado de Tickets</h2>
+            <p className="text-sm text-slate-500 mt-1">Consulta, actualiza y audita tickets con el branding corporativo activo.</p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 self-start md:self-auto">
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 font-semibold"
+              style={softBadgeStyle}
+            >
+              {tickets.length} ticket{tickets.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
       </div>
       {lastAudit && (
-        <div className="flex-none mb-3 rounded-md border border-blue-200 bg-blue-50 text-blue-800 px-3 py-2 text-sm flex items-center gap-2">
+        <div
+          className="flex-none mb-3 rounded-2xl border px-3 py-2 text-sm flex items-center gap-2"
+          style={{ borderColor: brandPalette.softer, backgroundColor: brandPalette.soft, color: brandPalette.deep }}
+        >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M12 18a6 6 0 100-12 6 6 0 000 12z" />
           </svg>
@@ -247,7 +282,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
           </span>
         </div>
       )}
-      <div className="flex-1 overflow-auto border border-gray-200 rounded-lg relative bg-white shadow-sm">
+      <div className="flex-1 overflow-auto border border-slate-200 rounded-2xl relative bg-white shadow-sm">
         {/* Vista móvil (Tarjetas) */}
         <div className="block md:hidden">
           {tickets.length === 0 ? (
@@ -286,7 +321,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                     )}
                   </div>
 
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                  <div className="flex flex-col gap-3 pt-2 border-t border-gray-100">
                     <select
                       value={ticket.estado}
                       disabled={!canChangeTicketStatus}
@@ -311,7 +346,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                           });
                         }, 'warning', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion, from: ticket.estado, to: nextEstado }, 'status');
                       }}
-                      className={`text-xs rounded border px-2 py-1 bg-white ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      className={`w-full text-xs rounded-xl border px-3 py-2 bg-white ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {estados.map((estado) => (
                         <option key={estado} value={estado} disabled={estado !== ticket.estado && !isTransitionAllowed(ticket.estado, estado)}>
@@ -320,11 +355,12 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       ))}
                     </select>
 
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         onClick={() => onEditTicket(ticket)}
                         disabled={!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
-                        className={`p-1.5 rounded border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100' : 'border-gray-300 text-gray-700 bg-gray-100'}`}
+                        className={`flex items-center justify-center p-2 rounded-xl border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100' : 'text-white'}`}
+                        style={(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? undefined : primaryButtonStyle}
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M4 20h4l10.606-10.606a2 2 0 10-2.828-2.828L5.172 17.172A4 4 0 004 20z" /></svg>
                       </button>
@@ -341,7 +377,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                               });
                             }, 'danger', { id: ticket.id, cliente: ticket.cliente }, 'delete');
                           }}
-                          className="p-1.5 rounded border border-red-300 text-white bg-red-600"
+                          className="flex items-center justify-center p-2 rounded-xl border border-red-300 text-white bg-red-600"
                         >
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4m-6 0h8m-9 4h10" /></svg>
                         </button>
@@ -349,7 +385,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       {canViewAudit && (
                         <button
                           onClick={() => openAudit(ticket)}
-                          className="p-1.5 rounded border border-blue-300 text-white bg-blue-600"
+                          className="flex items-center justify-center p-2 rounded-xl border text-white"
+                          style={primaryButtonStyle}
                         >
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </button>
@@ -432,7 +469,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                           });
                         }, 'warning', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion, from: ticket.estado, to: nextEstado }, 'status');
                       }}
-                      className={`rounded-md border px-3 py-2 text-sm ${getEstadoClasses(ticket.estado)} ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      className={`rounded-xl border px-3 py-2 text-sm ${getEstadoClasses(ticket.estado)} ${!canChangeTicketStatus ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {estados.map((estado) => (
                         <option key={estado} value={estado} disabled={estado !== ticket.estado && !isTransitionAllowed(ticket.estado, estado)}>
@@ -447,7 +484,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                         onClick={() => onEditTicket(ticket)}
                         aria-label="Editar"
                         disabled={!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado'}
-                        className={`px-3 py-2 rounded-md border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed' : 'border-gray-300 text-gray-700 bg-gray-100 hover:bg-gray-200'}`}
+                        className={`px-3 py-2 rounded-xl border ${(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed' : 'text-white'}`}
+                        style={(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? undefined : primaryButtonStyle}
                         title={(!canEditTickets || ticket.estado === 'resuelto' || ticket.estado === 'cancelado') ? 'No editable' : 'Editar'}
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -468,7 +506,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                             }, 'danger', { id: ticket.id, cliente: ticket.cliente, telefono: ticket.telefono, descripcion: ticket.descripcion }, 'delete');
                           }}
                           aria-label="Eliminar"
-                          className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700"
+                          className="px-3 py-2 rounded-xl border border-red-300 text-white bg-red-600 hover:bg-red-700"
                           title="Eliminar"
                         >
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -480,7 +518,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                         <button
                           onClick={() => openAudit(ticket)}
                           aria-label="Historial"
-                          className="px-3 py-2 rounded-md border border-blue-300 text-white bg-blue-600 hover:bg-blue-700"
+                          className="px-3 py-2 rounded-xl border text-white"
+                          style={primaryButtonStyle}
                           title="Ver historial"
                         >
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -497,8 +536,12 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
         </table>
       </div>
       {confirmState.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-lg w-[90%] max-w-sm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm border border-slate-200 overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div
+              className="h-1.5 w-full"
+              style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+            />
             <div className="px-4 py-3 border-b flex items-center gap-2">
               {confirmState.variant === 'danger' && (
                 <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -517,7 +560,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
               )}
               <h3 id="confirm-title" className="text-sm font-medium text-gray-800">Confirmación</h3>
             </div>
-            <div className="px-4 py-4 text-sm text-gray-700">
+            <div className="px-4 py-4 text-sm text-gray-700 overflow-y-auto">
               <p className="mb-2">{confirmState.message}</p>
               {confirmState.context && (
                 <div className="mt-2 space-y-1 text-xs text-gray-600">
@@ -536,18 +579,18 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                         value={cancelReason}
                         onChange={(e) => setCancelReason(toUpperValue(e.target.value))}
                         placeholder="Escribe el motivo..."
-                        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs w-full"
+                        className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs w-full"
                       />
                     </div>
                   )}
                 </div>
               )}
             </div>
-            <div className="px-4 py-3 border-t flex justify-end gap-2">
+            <div className="px-4 py-3 border-t flex flex-col-reverse sm:flex-row justify-end gap-2">
               <button
                 ref={cancelBtnRef}
                 onClick={closeConfirm}
-                className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                className="w-full sm:w-auto px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
               >
                 Cancelar
               </button>
@@ -559,11 +602,10 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                     closeConfirm();
                     if (typeof fn === 'function') fn();
                   }}
-                  className={
-                    confirmState.variant === 'danger'
-                      ? 'px-3 py-1.5 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700'
-                      : 'px-3 py-1.5 rounded-md border border-amber-300 text-white bg-amber-600 hover:bg-amber-700'
-                  }
+                  className={confirmState.variant === 'danger'
+                    ? 'w-full sm:w-auto px-3 py-1.5 rounded-xl border border-red-300 text-white bg-red-600 hover:bg-red-700'
+                    : 'w-full sm:w-auto px-3 py-1.5 rounded-xl border text-white'}
+                  style={confirmState.variant === 'danger' ? undefined : primaryButtonStyle}
                   disabled={confirmState.type === 'status' && confirmState.context?.to === 'cancelado' && !cancelReason.trim()}
                 >
                   Confirmar
@@ -575,75 +617,87 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
       )}
       {auditOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-0 md:p-4">
-          <div className="bg-white rounded-none md:rounded-lg shadow-lg w-full h-full md:max-w-7xl flex flex-col max-h-full" role="dialog" aria-modal="true" aria-labelledby="audit-title">
-            <div className="px-4 py-3 border-b flex items-center justify-between flex-none">
-              <h3 id="audit-title" className="text-sm font-medium text-gray-800">Historial de auditoría — Ticket #{auditTicketId}</h3>
-              <button onClick={() => setAuditOpen(false)} className="text-gray-600 hover:text-gray-800">✕</button>
+          <div className="bg-white rounded-none md:rounded-2xl shadow-lg w-full h-full md:max-w-7xl flex flex-col max-h-full border border-slate-200 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="audit-title">
+            <div
+              className="h-1.5 w-full"
+              style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+            />
+            <div className="px-4 py-3 border-b flex items-start justify-between gap-3 flex-none">
+              <div className="min-w-0">
+                <div
+                  className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] mb-2"
+                  style={softBadgeStyle}
+                >
+                  Trazabilidad
+                </div>
+                <h3 id="audit-title" className="text-sm font-medium text-gray-800 break-words">Historial de auditoría — Ticket #{auditTicketId}</h3>
+              </div>
+              <button onClick={() => setAuditOpen(false)} className="text-gray-600 hover:text-gray-800 flex-none">✕</button>
             </div>
-            <div className="flex-1 flex flex-col overflow-hidden px-4 py-4">
-              <div className="mb-3 flex flex-wrap items-end gap-3 flex-none">
-                <div>
+            <div className="flex-1 flex flex-col overflow-hidden px-3 sm:px-4 py-4">
+              <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 items-end gap-3 flex-none">
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Acción</label>
-                  <select value={auditFilter} onChange={(e) => setAuditFilter(e.target.value)} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs">
+                  <select value={auditFilter} onChange={(e) => setAuditFilter(e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs">
                     <option value="">Todas</option>
                     <option value="CREATE">CREATE</option>
                     <option value="UPDATE">UPDATE</option>
                     <option value="DELETE">DELETE</option>
                   </select>
                 </div>
-                <div>
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Usuario</label>
                   <input
                     type="text"
                     value={auditUserQuery}
                     onChange={(e) => setAuditUserQuery(toUpperValue(e.target.value))}
                     placeholder="Buscar por usuario"
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs w-44"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs"
                   />
                 </div>
-                <div>
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Desde</label>
                   <input
                     type="date"
                     value={auditFromDate}
                     onChange={(e) => setAuditFromDate(e.target.value)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs"
                   />
                 </div>
-                <div>
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Hasta</label>
                   <input
                     type="date"
                     value={auditToDate}
                     onChange={(e) => setAuditToDate(e.target.value)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs"
                   />
                 </div>
-                <div>
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Orden</label>
-                  <select value={auditOrder} onChange={(e) => setAuditOrder(e.target.value)} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs">
+                  <select value={auditOrder} onChange={(e) => setAuditOrder(e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs">
                     <option value="DESC">DESC</option>
                     <option value="ASC">ASC</option>
                   </select>
                 </div>
-                <div>
+                <div className="w-full">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Límite</label>
-                  <select value={auditLimit} onChange={(e) => setAuditLimit(Number(e.target.value))} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs">
+                  <select value={auditLimit} onChange={(e) => setAuditLimit(Number(e.target.value))} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs">
                     <option value={10}>10</option>
                     <option value={20}>20</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
                 </div>
-                <div>
+                <div className="w-full">
                   <button
                     onClick={() => fetchAudit(auditTicketId, { page: 1 })}
-                    className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
+                    className="w-full px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-xs"
                   >
                     Aplicar filtros
                   </button>
                 </div>
-                <div className="ml-auto">
+                <div className="w-full xl:col-span-1">
                   <button
                     onClick={() => {
                       const csv = toCSV(filteredAuditItems);
@@ -657,7 +711,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       document.body.removeChild(a);
                       URL.revokeObjectURL(url);
                     }}
-                    className="px-3 py-1.5 rounded-md border border-blue-300 text-white bg-blue-600 hover:bg-blue-700 text-xs"
+                    className="w-full px-3 py-1.5 rounded-xl border text-white text-xs"
+                    style={primaryButtonStyle}
                   >
                     Exportar CSV
                   </button>
@@ -672,9 +727,9 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                       <li className="text-sm text-gray-500">Sin registros de auditoría.</li>
                     )}
                     {filteredAuditItems.map((item) => (
-                      <li key={item.id} className="border border-gray-200 rounded-md p-4 text-sm bg-white shadow-sm mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
+                      <li key={item.id} className="border border-gray-200 rounded-2xl p-4 text-sm bg-white shadow-sm mb-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                               item.accion === 'CREATE' ? 'bg-green-100 text-green-800' :
                               item.accion === 'UPDATE' ? 'bg-blue-100 text-blue-800' :
@@ -686,7 +741,8 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                           </div>
                           <button 
                             onClick={() => toggleAuditDetails(item.id)}
-                            className="text-xs text-blue-600 hover:text-blue-800 underline"
+                            className="text-xs underline self-start"
+                            style={{ color: brandPalette.primary }}
                           >
                             {expandedAuditId === item.id ? 'Ocultar detalles técnicos' : 'Ver detalles técnicos'}
                           </button>
@@ -747,11 +803,11 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   </ul>
                 </div>
               )}
-              <div className="mt-3 flex items-center gap-2 text-xs flex-none pt-2 border-t">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs flex-none pt-2 border-t">
                 <button
                   disabled={auditPage <= 1 || auditLoading}
                   onClick={() => fetchAudit(auditTicketId, { page: Math.max(1, auditPage - 1) })}
-                  className="px-2 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                className="px-2 py-1 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
                   ◀︎ Anterior
                 </button>
@@ -759,14 +815,14 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                 <button
                   disabled={auditLoading || filteredAuditItems.length < auditLimit}
                   onClick={() => fetchAudit(auditTicketId, { page: auditPage + 1 })}
-                  className="px-2 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  className="px-2 py-1 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
                   Siguiente ▶︎
                 </button>
               </div>
             </div>
-            <div className="px-4 py-3 border-t flex justify-end flex-none bg-gray-50 md:rounded-b-lg">
-              <button onClick={() => setAuditOpen(false)} className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">Cerrar</button>
+            <div className="px-4 py-3 border-t flex justify-end flex-none bg-gray-50 md:rounded-b-2xl">
+              <button onClick={() => setAuditOpen(false)} className="w-full sm:w-auto px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">Cerrar</button>
             </div>
           </div>
         </div>
