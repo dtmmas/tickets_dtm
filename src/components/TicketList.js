@@ -43,6 +43,17 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
     }
   };
 
+  const getPriorityClasses = (prioridad) => {
+    switch (String(prioridad || 'normal').toLowerCase()) {
+      case 'urgente':
+        return 'bg-red-100 text-red-700 border-red-300';
+      case 'prioritario':
+        return 'bg-amber-100 text-amber-700 border-amber-300';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-300';
+    }
+  };
+
   // Campos de pago removidos
 
   const [confirmState, setConfirmState] = React.useState({ open: false, message: '', onConfirm: null, variant: 'warning', context: null, type: null });
@@ -105,6 +116,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
     latitud: 'Latitud',
     longitud: 'Longitud',
     estado: 'Estado',
+    prioridad: 'Prioridad',
     fechaProgramada: 'Fecha Programada',
     motivo_cancelacion: 'Motivo de Cancelación',
     creador_nombre: 'Creado por',
@@ -305,9 +317,14 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                 <div key={ticket.id} className="p-4 hover:bg-gray-50">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-xs font-bold text-gray-500">#{ticket.id}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs border ${getEstadoClasses(ticket.estado)}`}>
-                      {ticket.estado.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-xs border ${getPriorityClasses(ticket.prioridad)}`}>
+                        {String(ticket.prioridad || 'normal').toUpperCase()}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-xs border ${getEstadoClasses(ticket.estado)}`}>
+                        {ticket.estado.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
                   
                   <div className="mb-2">
@@ -322,6 +339,9 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
                     <div>
                       <span className="font-medium">Tipo:</span> {ticket.tipoSoporte}
+                    </div>
+                    <div>
+                      <span className="font-medium">Prioridad:</span> {String(ticket.prioridad || 'normal').toUpperCase()}
                     </div>
                     <div>
                       <span className="font-medium">Fecha:</span> {formatDateParts(ticket?.fechaCreacion).date}
@@ -434,6 +454,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
               <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Teléfono</th>
               <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Descripción</th>
               <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Tipo</th>
+              <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Prioridad</th>
               <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Fecha programada</th>
               <th className="px-3 py-2 text-left text-sm font-medium text-gray-600">Motivo cancelación</th>
               {/* Columnas de pago removidas */}
@@ -446,7 +467,7 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
           <tbody className="divide-y divide-gray-100">
             {tickets.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={11}>No hay tickets disponibles</td>
+                <td className="px-4 py-6 text-center text-gray-500" colSpan={12}>No hay tickets disponibles</td>
               </tr>
             ) : (
               tickets.map((ticket) => (
@@ -469,6 +490,11 @@ const TicketList = ({ tickets, estados, onEditTicket, onUpdateStatus, onDeleteTi
                     )}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.tipoSoporte}</td>
+                  <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getPriorityClasses(ticket.prioridad)}`}>
+                      {String(ticket.prioridad || 'normal').toUpperCase()}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.fechaProgramada ? formatDateTimeDisplay(ticket.fechaProgramada) : '—'}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.estado === 'cancelado' ? (ticket.motivo_cancelacion || '—') : '—'}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 leading-relaxed align-top">{ticket.creador_nombre || '—'}</td>

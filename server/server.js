@@ -191,6 +191,15 @@ const queryRows = async (sql, params = []) => {
   return rows || [];
 };
 
+const TICKET_PRIORITIES = ['normal', 'prioritario', 'urgente'];
+
+const normalizeTicketPriority = (value, fallback = 'normal') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return TICKET_PRIORITIES.includes(normalized) ? normalized : fallback;
+};
+
+const isAdminUser = (user) => normalizeRoleName(user?.rol || user?.role?.nombre) === 'admin';
+
 const hasPermission = (user, permission) => {
   const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
   return permissions.includes(permission);
@@ -286,6 +295,7 @@ db.getConnection((err, connection) => {
       latitud DECIMAL(10,7) DEFAULT NULL,
       longitud DECIMAL(10,7) DEFAULT NULL,
       estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+      prioridad VARCHAR(20) NOT NULL DEFAULT 'normal',
       precio DECIMAL(10,2) DEFAULT NULL,
       cobro_aplica BOOLEAN DEFAULT FALSE,
       pago DECIMAL(10,2) DEFAULT NULL,
@@ -358,6 +368,20 @@ db.getConnection((err, connection) => {
               console.error('Error al agregar columna longitud:', alterErr);
             } else {
               console.log('Columna longitud agregada a tickets');
+            }
+          });
+        }
+      });
+      const priorityCheck = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tickets' AND COLUMN_NAME = 'prioridad'`;
+      db.query(priorityCheck, (priorityErr, priorityRows) => {
+        if (priorityErr) {
+          console.error('Error al verificar columna prioridad:', priorityErr);
+        } else if (!Array.isArray(priorityRows) || priorityRows.length === 0) {
+          db.query(`ALTER TABLE tickets ADD COLUMN prioridad VARCHAR(20) NOT NULL DEFAULT 'normal'`, (alterErr) => {
+            if (alterErr) {
+              console.error('Error al agregar columna prioridad:', alterErr);
+            } else {
+              console.log('Columna prioridad agregada a tickets');
             }
           });
         }
@@ -1255,7 +1279,7 @@ app.get('/api/tickets', verifyToken, requirePermission('tickets.view'), (req, re
 // Crear un nuevo ticket
 app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req, res) => {
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
-  let { fechaProgramada, latitud, longitud } = req.body;
+  let { fechaProgramada, latitud, longitud, prioridad } = req.body;
   const userId = req.user.id;
   
   if (!cliente || !direccion || !telefono || !descripcion || !tipoSoporte) {
@@ -1267,6 +1291,9 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
   const fpSql = toSqlDateTimeString(fechaProgramada);
   const normalizedLat = normalizeCoordinate(latitud, { min: -90, max: 90 });
   const normalizedLng = normalizeCoordinate(longitud, { min: -180, max: 180 });
+  const normalizedPriority = isAdminUser(req.user)
+    ? normalizeTicketPriority(prioridad, 'normal')
+    : 'normal';
 
   if (Number.isNaN(normalizedLat) || Number.isNaN(normalizedLng)) {
     return res.status(400).json({ error: 'Las coordenadas ingresadas no son válidas' });
@@ -1276,11 +1303,11 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
   }
   
   const query = `
-    INSERT INTO tickets (cliente, direccion, telefono, descripcion, tipoSoporte, latitud, longitud, estado, fechaProgramada, creado_por, modificado_por)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tickets (cliente, direccion, telefono, descripcion, tipoSoporte, latitud, longitud, estado, prioridad, fechaProgramada, creado_por, modificado_por)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
-  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, computedEstado, fpSql, userId, userId], (err, result) => {
+  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, computedEstado, normalizedPriority, fpSql, userId, userId], (err, result) => {
     if (err) {
       console.error('Error al crear ticket:', err);
       return res.status(500).json({ error: 'Error al crear ticket' });
@@ -1306,7 +1333,7 @@ app.post('/api/tickets', verifyToken, requirePermission('tickets.create'), (req,
 app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req, res) => {
   const { id } = req.params;
   const { cliente, direccion, telefono, descripcion, tipoSoporte } = req.body;
-  let { fechaProgramada, latitud, longitud } = req.body;
+  let { fechaProgramada, latitud, longitud, prioridad } = req.body;
   const userId = req.user.id;
   
   if (!cliente || !direccion || !telefono || !descripcion || !tipoSoporte) {
@@ -1315,6 +1342,9 @@ app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req
   const fpSql = toSqlDateTimeString(fechaProgramada);
   const normalizedLat = normalizeCoordinate(latitud, { min: -90, max: 90 });
   const normalizedLng = normalizeCoordinate(longitud, { min: -180, max: 180 });
+  const normalizedPriority = isAdminUser(req.user)
+    ? normalizeTicketPriority(prioridad, 'normal')
+    : null;
   if (Number.isNaN(normalizedLat) || Number.isNaN(normalizedLng)) {
     return res.status(400).json({ error: 'Las coordenadas ingresadas no son válidas' });
   }
@@ -1323,11 +1353,11 @@ app.put('/api/tickets/:id', verifyToken, requirePermission('tickets.edit'), (req
   }
   const query = `
     UPDATE tickets
-    SET cliente = ?, direccion = ?, telefono = ?, descripcion = ?, tipoSoporte = ?, latitud = ?, longitud = ?, fechaProgramada = ?, modificado_por = ?
+    SET cliente = ?, direccion = ?, telefono = ?, descripcion = ?, tipoSoporte = ?, latitud = ?, longitud = ?, fechaProgramada = ?, prioridad = COALESCE(?, prioridad), modificado_por = ?
     WHERE id = ? AND estado <> 'resuelto' AND estado <> 'cancelado'
   `;
   
-  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, fpSql, userId, id], (err, result) => {
+  db.query(query, [cliente, direccion, telefono, descripcion, tipoSoporte, normalizedLat, normalizedLng, fpSql, normalizedPriority, userId, id], (err, result) => {
     if (err) {
       console.error('Error al actualizar ticket:', err);
       return res.status(500).json({ error: 'Error al actualizar ticket' });

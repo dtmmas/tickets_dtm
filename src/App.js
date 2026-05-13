@@ -9,6 +9,7 @@ import UsersManager from './components/UsersManager';
 import CalendarAgenda from './components/CalendarAgenda';
 import { hasPermission } from './permissions';
 import { applyFavicon, DEFAULT_BRAND, extractBrandFromImage } from './branding';
+import { formatDateTimeDisplay, getDateOnlyKey } from './datetime';
 
 // API URL
 // En producción, usamos path relativo para que funcione con cualquier IP/dominio
@@ -42,6 +43,7 @@ function App() {
   const [showTipos, setShowTipos] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUsersManager, setShowUsersManager] = useState(false);
+  const [showTechPriorityDialog, setShowTechPriorityDialog] = useState(false);
   const [publicBranding, setPublicBranding] = useState({
     empresaNombre: 'Sistema de Tickets',
     loginSubtitle: '',
@@ -52,6 +54,7 @@ function App() {
   const mainScrollRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const topActionsLockUntilRef = useRef(0);
+  const techPriorityDialogShownRef = useRef(false);
   const canViewDashboard = hasPermission(user, 'dashboard.view');
   const canViewTickets = hasPermission(user, 'tickets.view');
   const canCreateTickets = hasPermission(user, 'tickets.create');
@@ -66,6 +69,8 @@ function App() {
   const canManageUsers = hasPermission(user, 'users.manage');
   const canManageRoles = hasPermission(user, 'roles.manage');
   const canOpenUsersManager = canManageUsers || canManageRoles;
+  const isAdmin = (user?.rol || user?.role?.nombre) === 'admin';
+  const isTechnician = (user?.rol || user?.role?.nombre) === 'tecnico';
 
   // Filtros de listado
   const [filterEstado, setFilterEstado] = useState('pendiente');
@@ -91,6 +96,25 @@ function App() {
     }
     return result;
   }, [tickets, filterEstado, filterTipo, filterQuery]);
+
+  const todaysPriorityTickets = useMemo(() => {
+    const todayKey = getDateOnlyKey(new Date());
+    const priorityWeight = { urgente: 0, prioritario: 1 };
+
+    return tickets
+      .filter((ticket) =>
+        ticket.estado === 'pendiente' &&
+        ['urgente', 'prioritario'].includes(String(ticket.prioridad || '').toLowerCase()) &&
+        getDateOnlyKey(ticket.fechaProgramada) === todayKey
+      )
+      .sort((a, b) => {
+        const priorityDiff =
+          (priorityWeight[String(a.prioridad || '').toLowerCase()] ?? 99) -
+          (priorityWeight[String(b.prioridad || '').toLowerCase()] ?? 99);
+        if (priorityDiff !== 0) return priorityDiff;
+        return String(a.fechaProgramada || '').localeCompare(String(b.fechaProgramada || ''));
+      });
+  }, [tickets]);
 
   // Verificar token al cargar la aplicación
   useEffect(() => {
@@ -207,6 +231,8 @@ function App() {
     setIsAuthenticated(false);
     setTickets([]);
     setTiposSoporte([]);
+    setShowTechPriorityDialog(false);
+    techPriorityDialogShownRef.current = false;
   };
 
   // Cargar tickets desde el backend
@@ -288,6 +314,19 @@ function App() {
       setViewMode('lista');
     }
   }, [viewMode, canViewCalendar]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isTechnician || !canViewTickets) {
+      setShowTechPriorityDialog(false);
+      techPriorityDialogShownRef.current = false;
+      return;
+    }
+
+    if (!techPriorityDialogShownRef.current && todaysPriorityTickets.length > 0) {
+      setShowTechPriorityDialog(true);
+      techPriorityDialogShownRef.current = true;
+    }
+  }, [isAuthenticated, isTechnician, canViewTickets, todaysPriorityTickets]);
 
   const revealTopActions = useCallback(() => {
     const scrollNode = mainScrollRef.current;
@@ -508,6 +547,21 @@ function App() {
     setError(null);
   };
 
+  const handleCloseTechPriorityDialog = () => {
+    setShowTechPriorityDialog(false);
+    setFilterEstado('pendiente');
+    setFilterTipo('');
+    setFilterQuery('');
+  };
+
+  const handleOpenPriorityTicket = (ticket) => {
+    setShowTechPriorityDialog(false);
+    setFilterEstado('pendiente');
+    setFilterTipo('');
+    setFilterQuery('');
+    handleEditTicket(ticket);
+  };
+
   return (
     <>
       {!isAuthenticated ? (
@@ -638,7 +692,6 @@ function App() {
                 />
               </div>
               )}
-              
               <div className="flex flex-col bg-white rounded-lg shadow relative overflow-visible md:flex-1 md:min-h-0 md:overflow-hidden">
                 {loading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
@@ -782,7 +835,104 @@ function App() {
             onSave={handleSaveTicket}
             loading={loading}
             brandPalette={brandPalette}
+            canManagePriority={isAdmin}
           />
+
+          {showTechPriorityDialog && isTechnician && (
+            <div className="fixed inset-0 z-50">
+              <div className="absolute inset-0 bg-black/50" onClick={handleCloseTechPriorityDialog} />
+              <div className="relative z-10 flex h-full items-center justify-center px-3 py-4 sm:px-4">
+                <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                  <div
+                    className="h-1.5 w-full"
+                    style={{ background: `linear-gradient(90deg, ${brandPalette.primary}, ${brandPalette.deep})` }}
+                  />
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-4 sm:px-6">
+                    <div>
+                      <div className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-red-700">
+                        Atención inmediata
+                      </div>
+                      <h2 className="mt-2 text-xl font-semibold text-slate-900">Tickets urgentes y prioritarios de hoy</h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Revise primero estos tickets. Al cerrar este aviso verá el listado completo de tickets pendientes.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloseTechPriorityDialog}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+
+                  <div className="max-h-[70vh] overflow-y-auto px-4 py-4 sm:px-6">
+                    {todaysPriorityTickets.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                        No hay tickets urgentes o prioritarios programados para hoy.
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {todaysPriorityTickets.map((ticket) => {
+                          const isUrgent = String(ticket.prioridad || '').toLowerCase() === 'urgente';
+                          return (
+                            <button
+                              key={ticket.id}
+                              type="button"
+                              onClick={() => handleOpenPriorityTicket(ticket)}
+                              className="rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"
+                              style={{
+                                borderColor: isUrgent ? '#fca5a5' : '#fcd34d',
+                                backgroundColor: isUrgent ? '#fff1f2' : '#fffbeb'
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    Ticket #{ticket.id}
+                                  </div>
+                                  <div className="mt-1 truncate text-base font-semibold text-slate-900">
+                                    {ticket.cliente}
+                                  </div>
+                                </div>
+                                <span
+                                  className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                  style={{
+                                    backgroundColor: isUrgent ? '#fee2e2' : '#fef3c7',
+                                    color: isUrgent ? '#b91c1c' : '#92400e'
+                                  }}
+                                >
+                                  {String(ticket.prioridad || 'normal').toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="mt-3 space-y-1 text-sm text-slate-700">
+                                <div>{ticket.tipoSoporte}</div>
+                                <div>{ticket.telefono || 'Sin teléfono'}</div>
+                                <div className="line-clamp-2">{ticket.descripcion}</div>
+                              </div>
+                              <div className="mt-3 text-xs font-medium text-slate-600">
+                                Programado: {ticket.fechaProgramada ? formatDateTimeDisplay(ticket.fechaProgramada) : 'Sin fecha'}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end border-t border-slate-100 px-4 py-3 sm:px-6">
+                    <button
+                      type="button"
+                      onClick={handleCloseTechPriorityDialog}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Ver todos los pendientes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {showTipos && canManageSupportTypes && (
             <TiposSoporteManager apiUrl={API_URL} onClose={() => setShowTipos(false)} brandPalette={brandPalette} />

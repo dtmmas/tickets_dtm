@@ -18,6 +18,7 @@ const createEmptyFormData = () => ({
   telefono: '',
   descripcion: '',
   tipoSoporte: '',
+  prioridad: 'normal',
   estado: 'pendiente',
   fechaProgramada: '',
   latitud: '',
@@ -25,7 +26,7 @@ const createEmptyFormData = () => ({
 });
 
 // Componente para el diálogo de creación/edición de tickets
-const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, brandPalette = DEFAULT_BRAND }) => {
+const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, brandPalette = DEFAULT_BRAND, canManagePriority = false }) => {
   // Estado para los datos del formulario
   const [formData, setFormData] = useState(createEmptyFormData);
   const [formErrors, setFormErrors] = useState({});
@@ -311,6 +312,23 @@ const TicketDialog = ({ open, ticket, tiposSoporte, onClose, onSave, loading, br
                   />
                   <p className="text-xs text-gray-500 mt-1">Opcional. Agenda la fecha en que se resolverá/realizará el ticket.</p>
                 </div>
+                {canManagePriority && (
+                  <div>
+                    <div className="mb-2 text-[#5a6c7d] font-medium text-sm">Prioridad</div>
+                    <select
+                      name="prioridad"
+                      value={formData.prioridad || 'normal'}
+                      onChange={handleChange}
+                      disabled={loading || isResolved}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-3 text-gray-700 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="prioritario">Prioritario</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Defina la prioridad para que el técnico vea primero los tickets más críticos del día.</p>
+                  </div>
+                )}
                 <div>
                   <div className="mb-2 text-[#5a6c7d] font-medium text-sm">Teléfono</div>
                   <input
