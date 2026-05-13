@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
-import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { LayersControl, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -15,6 +15,7 @@ L.Icon.Default.mergeOptions({
 
 const DEFAULT_CENTER = [15.5, -90.35];
 const SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const REVERSE_ENDPOINT = 'https://nominatim.openstreetmap.org/reverse';
 
 const RecenterMap = ({ position }) => {
   const map = useMap();
@@ -46,6 +47,8 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [selectedAddress, setSelectedAddress] = useState('');
+  const [loadingAddress, setLoadingAddress] = useState(false);
   const hasCoordinates =
     latitud !== '' &&
     longitud !== '' &&
@@ -56,12 +59,56 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
     () => (hasCoordinates ? [Number(latitud), Number(longitud)] : null),
     [hasCoordinates, latitud, longitud]
   );
+  const positionLat = position ? position[0] : null;
+  const positionLng = position ? position[1] : null;
 
   const center = position || DEFAULT_CENTER;
 
   const handlePick = (latlng) => {
     onChange(latlng.lat.toFixed(7), latlng.lng.toFixed(7));
   };
+
+  useEffect(() => {
+    if (positionLat === null || positionLng === null) {
+      setSelectedAddress('');
+      setLoadingAddress(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchAddress = async () => {
+      try {
+        setLoadingAddress(true);
+        const response = await fetch(
+          `${REVERSE_ENDPOINT}?format=jsonv2&accept-language=es&lat=${encodeURIComponent(positionLat)}&lon=${encodeURIComponent(positionLng)}&zoom=18&addressdetails=1`
+        );
+
+        if (!response.ok) {
+          throw new Error('No se pudo resolver la dirección');
+        }
+
+        const data = await response.json();
+        if (!cancelled) {
+          setSelectedAddress(data.display_name || 'Ubicación aproximada sin dirección detallada');
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setSelectedAddress('No se pudo obtener la dirección aproximada del punto.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingAddress(false);
+        }
+      }
+    };
+
+    fetchAddress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [positionLat, positionLng]);
 
   const handleSearch = async (event) => {
     event?.preventDefault?.();
@@ -77,7 +124,7 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
       setSearching(true);
       setSearchError('');
       const response = await fetch(
-        `${SEARCH_ENDPOINT}?format=jsonv2&limit=6&accept-language=es&q=${encodeURIComponent(query)}`
+        `${SEARCH_ENDPOINT}?format=jsonv2&limit=6&addressdetails=1&accept-language=es&q=${encodeURIComponent(query)}`
       );
 
       if (!response.ok) {
@@ -106,6 +153,7 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
     setSearchQuery(result.display_name || '');
     setSearchResults([]);
     setSearchError('');
+    setSelectedAddress(result.display_name || '');
     onChange(nextLat, nextLng);
   };
 
@@ -153,14 +201,37 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
       <MapContainer
         key={mapKey}
         center={center}
-        zoom={position ? 18 : 6}
+        zoom={position ? 19 : 6}
         scrollWheelZoom
         className="h-72 w-full"
       >
-        <TileLayer
-          attribution='Tiles &copy; Esri'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        />
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Calles">
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Satélite">
+            <TileLayer
+              attribution='Tiles &copy; Esri'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Híbrido">
+            <>
+              <TileLayer
+                attribution='Tiles &copy; Esri'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              />
+              <TileLayer
+                attribution='&copy; OpenStreetMap contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                opacity={0.35}
+              />
+            </>
+          </LayersControl.BaseLayer>
+        </LayersControl>
         <ClickSelector disabled={disabled} onPick={handlePick} />
         <RecenterMap position={position} />
         {position && (
@@ -176,8 +247,15 @@ const LocationPickerMap = ({ mapKey = 'default', latitud, longitud, onChange, di
           />
         )}
       </MapContainer>
-      <div className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-        Busque una localidad, haga clic en el mapa o arrastre el marcador para definir la ubicación del cliente.
+      <div className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500 space-y-1">
+        <div>Busque una localidad, haga clic en el mapa o arrastre el marcador para definir la ubicación del cliente.</div>
+        {(positionLat !== null && positionLng !== null) && (
+          <div className="text-slate-600">
+            {loadingAddress
+              ? 'Buscando dirección aproximada...'
+              : `Dirección aproximada: ${selectedAddress || 'Sin datos disponibles'}`}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -68,7 +68,7 @@ function App() {
   const canOpenUsersManager = canManageUsers || canManageRoles;
 
   // Filtros de listado
-  const [filterEstado, setFilterEstado] = useState('');
+  const [filterEstado, setFilterEstado] = useState('pendiente');
   const [filterTipo, setFilterTipo] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
   const [viewMode, setViewMode] = useState('lista'); // 'lista' | 'calendario'
